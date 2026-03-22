@@ -1069,6 +1069,7 @@ function serializeState() {
         fmt: document.getElementById('format-select').value,
         dur: document.getElementById('duration-select').value,
         lps: document.getElementById('loops-select').value,
+        scl: globalScale,
         fx: [ppSettings.crt ? 1 : 0, ppSettings.flipX ? 1 : 0, ppSettings.flipY ? 1 : 0, ppSettings.bloom]
     };
 
@@ -1137,6 +1138,12 @@ function deserializeState(encodedStr) {
         if (state.lps) {
             document.getElementById('loops-select').value = state.lps;
             document.getElementById('loops-select').dispatchEvent(new Event('change'));
+        }
+
+        if (state.scl !== undefined) {
+            globalScale = state.scl;
+            document.getElementById('scale-slider').value = state.scl;
+            document.getElementById('scale-display').innerText = state.scl.toFixed(1);
         }
 
         if (state.fx) {
