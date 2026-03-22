@@ -17,8 +17,8 @@ import p5 from 'p5';
 
 const localPalettes = import.meta.glob('./.local/palettes/*.json', { eager: true });
 
-const coreSketchesRaw = import.meta.glob('./sketches/*.js', { as: 'raw', eager: true });
-const localSketchesRaw = import.meta.glob('./.local/sketches/*.js', { as: 'raw', eager: true });
+const coreSketchesRaw = import.meta.glob('./sketches/*.js', { query: '?raw', import: 'default', eager: true });
+const localSketchesRaw = import.meta.glob('./.local/sketches/*.js', { query: '?raw', import: 'default', eager: true });
 
 const sketchRegistry = {};
 const sketchRawRegistry = {};
