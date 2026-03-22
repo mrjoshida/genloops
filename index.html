@@ -12,6 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
     <script src="https://unpkg.com/mp4-muxer/build/mp4-muxer.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 </head>
 <style>
         .checkbox-group label { margin: 0; }
@@ -79,13 +80,7 @@
                 <div class="control-group">
                     <label for="palette-select">Color Palette</label>
                     <select id="palette-select">
-                        <option value="moody">Moody Cinematic</option>
-                        <option value="grayscale">High-Contrast Grayscale</option>
-                        <option value="cyberpunk">Neon Cyberpunk</option>
-                        <option value="earthy">Earthy Nostalgia</option>
-                        <option value="lofi">Lo-Fi Pastels</option>
-                        <option value="psychedelic">Psychedelic Vibrant</option>
-                        <option value="custom">Custom Colors</option>
+                        <!-- Populated by engine.js -->
                     </select>
                 </div>
 
@@ -146,6 +141,8 @@
                 </select>
                 <button id="btn-play" style="width: 100%; margin-bottom: 10px;">Pause</button>
                 <button id="btn-export" style="width: 100%; background-color: #555;">Render (MP4)</button>
+                <div style="width: 100%; height: 1px; background: #333; margin: 15px 0;"></div>
+                <button id="btn-share-state" style="width: 100%; background-color: #3b5998; color: white;">🔗 Save / Share Setup</button>
             </div>
         </aside>
 
@@ -195,6 +192,28 @@
         <div style="margin-top: 20px; display: flex; gap: 15px;">
             <button id="btn-download" style="background-color: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">Download MP4</button>
             <button id="btn-close-preview" style="background-color: #f44336; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">Close Preview</button>
+        </div>
+    </div>
+
+    <!-- Share URL Modal -->
+    <div id="share-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1100; align-items: center; justify-content: center; flex-direction: column;">
+        <div style="background: #1e1e1e; border: 1px solid #333; padding: 25px; border-radius: 8px; width: 500px; max-width: 90vw; font-family: sans-serif;">
+            <h2 style="color: white; margin-top: 0; margin-bottom: 15px;">💾 Save State URL</h2>
+            
+            <p style="color: #bbb; font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
+                <strong>Local Storage Notice:</strong> Your sketch edits are automatically saved securely to your browser's private memory as you work.
+                However, if you clear your cookies or change devices, your work will be lost.
+            </p>
+            <p style="color: #bbb; font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
+                To permanently backup this exact configuration or share it with others, copy the URL below. It contains a compressed snapshot of every slider, color, and line of code!
+            </p>
+            
+            <input type="text" id="share-url-input" readonly style="width: 100%; padding: 10px; background: #000; color: #0f8; border: 1px solid #555; border-radius: 4px; font-family: monospace; font-size: 13px; margin-bottom: 15px; box-sizing: border-box;">
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button id="btn-copy-url" style="background-color: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">Copy URL</button>
+                <button id="btn-close-share" style="background-color: #555; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Close</button>
+            </div>
         </div>
     </div>
 

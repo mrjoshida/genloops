@@ -1,11 +1,11 @@
 const palettes = {
-    moody: ['#0B0C10', '#1F2833', '#66FCF1', '#45A29E'],
-    grayscale: ['#000000', '#FFFFFF', '#888888', '#333333'],
-    cyberpunk: ['#09012F', '#FF007F', '#00FFFF', '#FFEA00'],
-    earthy: ['#2C1A1D', '#F05D23', '#7A9E7E', '#EBCFB2'],
-    lofi: ['#2B2D42', '#FF80A0', '#FDE74C', '#5BC0EB'],
-    psychedelic: ['#5C0029', '#39FF14', '#04D9FF', '#FF5A09'],
-    custom: ['#000000', '#FFFFFF', '#FF0000', '#0000FF']
+    moody: { name: 'Moody Cinematic', abbr: 'cine', colors: ['#0B0C10', '#1F2833', '#66FCF1', '#45A29E'] },
+    grayscale: { name: 'High-Contrast Grayscale', abbr: 'bw', colors: ['#000000', '#FFFFFF', '#888888', '#333333'] },
+    cyberpunk: { name: 'Neon Cyberpunk', abbr: 'cybe', colors: ['#09012F', '#FF007F', '#00FFFF', '#FFEA00'] },
+    earthy: { name: 'Earthy Nostalgia', abbr: 'eart', colors: ['#2C1A1D', '#F05D23', '#7A9E7E', '#EBCFB2'] },
+    lofi: { name: 'Lo-Fi Pastels', abbr: 'lofi', colors: ['#2B2D42', '#FF80A0', '#FDE74C', '#5BC0EB'] },
+    psychedelic: { name: 'Psychedelic Vibrant', abbr: 'psyc', colors: ['#5C0029', '#39FF14', '#04D9FF', '#FF5A09'] },
+    custom: { name: 'Custom Colors', abbr: 'cust', colors: ['#000000', '#FFFFFF', '#FF0000', '#0000FF'] }
 };
 
 const fps = 30;
@@ -34,7 +34,7 @@ allPaths.forEach(path => {
 
 
 let activeSketch = null;
-let currentPalette = palettes.moody;
+let currentPalette = palettes.moody.colors;
 let params = {}; // Dynamically holds values bound to UI
 
 // UI References
@@ -42,22 +42,53 @@ const canvasContainer = document.getElementById('canvas-container');
 const dynamicControls = document.getElementById('dynamic-controls');
 const paletteSelect = document.getElementById('palette-select');
 
+// Populate palette dropdown dynamically
+paletteSelect.innerHTML = '';
+Object.keys(palettes).forEach(key => {
+    if (key === 'custom') return; // append later
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.innerText = palettes[key].name;
+    paletteSelect.appendChild(opt);
+});
+
 // Parse and Inject dynamically discovered custom color arrays
 Object.keys(localPalettes).forEach(path => {
     const filename = path.split('/').pop().replace('.json', '');
     const paletteData = localPalettes[path].default || localPalettes[path];
 
     if (Array.isArray(paletteData) && paletteData.length >= 2) {
-        // Register internally
-        palettes[filename] = paletteData;
+        // Automatically assume legacy schema
+        palettes[filename] = {
+            name: filename.replace(/_/g, ' ') + ' (Local)',
+            abbr: filename.substring(0, 4),
+            colors: paletteData
+        };
 
-        // Build and append to UI before the manual 'custom' entry
         const opt = document.createElement('option');
         opt.value = filename;
-        opt.innerText = filename.replace(/_/g, ' ') + ' (Local)';
-        paletteSelect.insertBefore(opt, paletteSelect.querySelector('option[value="custom"]'));
+        opt.innerText = palettes[filename].name;
+        paletteSelect.appendChild(opt);
+    } else if (paletteData.colors && Array.isArray(paletteData.colors)) {
+        // Native new schema { name, abbr, colors }
+        palettes[filename] = {
+            name: (paletteData.name || filename) + ' (Local)',
+            abbr: paletteData.abbr || filename.substring(0, 4),
+            colors: paletteData.colors
+        };
+
+        const opt = document.createElement('option');
+        opt.value = filename;
+        opt.innerText = palettes[filename].name;
+        paletteSelect.appendChild(opt);
     }
 });
+
+// Append custom option last
+const optCustom = document.createElement('option');
+optCustom.value = 'custom';
+optCustom.innerText = palettes['custom'].name;
+paletteSelect.appendChild(optCustom);
 const sketchSelect = document.getElementById('sketch-select');
 // Populate Sketch Select dynamically
 sketchSelect.innerHTML = '';
@@ -73,6 +104,32 @@ allPaths.forEach(path => {
 const formatSelect = document.getElementById('format-select');
 const btnPlay = document.getElementById('btn-play');
 const btnExport = document.getElementById('btn-export');
+
+// Share State DOM
+const btnShareState = document.getElementById('btn-share-state');
+const shareModal = document.getElementById('share-modal');
+const shareUrlInput = document.getElementById('share-url-input');
+const btnCopyUrl = document.getElementById('btn-copy-url');
+const btnCloseShare = document.getElementById('btn-close-share');
+
+btnShareState.addEventListener('click', () => {
+    const code = serializeState();
+    const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?preset=' + code;
+    shareUrlInput.value = newUrl;
+    shareModal.style.display = 'flex';
+    shareUrlInput.select();
+});
+
+btnCopyUrl.addEventListener('click', () => {
+    shareUrlInput.select();
+    document.execCommand('copy');
+    btnCopyUrl.innerText = 'Copied!';
+    setTimeout(() => btnCopyUrl.innerText = 'Copy URL', 2000);
+});
+
+btnCloseShare.addEventListener('click', () => {
+    shareModal.style.display = 'none';
+});
 
 // Editor DOM
 const editorPanel = document.getElementById('editor-panel');
@@ -172,7 +229,7 @@ const customColorInputs = [
 
 paletteSelect.addEventListener('change', (e) => {
     const val = e.target.value;
-    currentPalette = palettes[val];
+    currentPalette = palettes[val].colors;
     if (val === 'custom') {
         customColorsGroup.style.display = 'block';
     } else {
@@ -182,9 +239,9 @@ paletteSelect.addEventListener('change', (e) => {
 
 customColorInputs.forEach((input, index) => {
     input.addEventListener('input', (e) => {
-        palettes.custom[index] = e.target.value;
+        palettes.custom.colors[index] = e.target.value;
         if (paletteSelect.value === 'custom') {
-            currentPalette = palettes.custom;
+            currentPalette = palettes.custom.colors;
         }
     });
 });
@@ -242,7 +299,7 @@ function updateEditorBadge(isModified, isUpload) {
         badge.innerText = 'Local Upload';
         badge.style.background = '#2196F3';
     } else if (isModified) {
-        badge.innerText = 'Draft (Unsaved)';
+        badge.innerText = 'Modified (Auto-Saved)';
         badge.style.background = '#ff9800';
     } else {
         badge.innerText = 'Built-in';
@@ -311,7 +368,7 @@ btnPlay.addEventListener('click', () => {
 
 let capturer = null;
 
-function handleVideoBlob(blob) {
+function handleVideoBlob(blob, suggestedFileName) {
     currentBlobUrl = URL.createObjectURL(blob);
 
     // Display Preview Modal
@@ -320,7 +377,7 @@ function handleVideoBlob(blob) {
 
     // Re-bind download button actively to ensure fresh link mapping
     btnDownload.onclick = async () => {
-        const defaultName = 'genloops_export_' + Date.now() + '.mp4';
+        const defaultName = suggestedFileName || ('genloops_export_' + Date.now() + '.mp4');
 
         try {
             // Force a 'Save As' native OS dialog using the modern File System Access API
@@ -473,7 +530,20 @@ btnExport.addEventListener('click', async () => {
 
     // Create the Blob from Mp4Muxer Target
     const mp4Blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-    handleVideoBlob(mp4Blob);
+
+    // Generate descriptive filename
+    let safeSketchName = activeSketch.name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    if (safeSketchName.includes('custom-sandbox-sketch')) safeSketchName = 'custom';
+    
+    let paletteVal = document.getElementById('palette-select').value;
+    let paletteAbbr = palettes[paletteVal].abbr;
+
+    let aspect = document.getElementById('format-select').value.replace(':', '_');
+    let duration = document.getElementById('duration-select').value + 's';
+
+    const suggestedFileName = `gl_${safeSketchName}_${aspect}_${duration}_${paletteAbbr}.mp4`;
+
+    handleVideoBlob(mp4Blob, suggestedFileName);
     isRecording = false;
 });
 
@@ -578,7 +648,7 @@ function buildUI(sketchParams) {
 
             if (param.canModulate !== false) {
                 // Initialize internal LFO state attached to param
-                param.lfo = {
+                param.lfo = param.lfo || {
                     enabled: false,
                     speed: 1, // multiplier of base loop speed
                     min: param.min,
@@ -590,7 +660,7 @@ function buildUI(sketchParams) {
                 minInput.min = param.min;
                 minInput.max = param.max;
                 minInput.step = param.step || ((param.max - param.min) / 100);
-                minInput.value = param.min;
+                minInput.value = param.lfo.min;
                 minInput.style.display = 'none'; // hidden initially
                 minInput.id = `param-min-${param.id}`;
                 minInput.style.zIndex = '4';
@@ -601,7 +671,7 @@ function buildUI(sketchParams) {
                 maxInput.min = param.min;
                 maxInput.max = param.max;
                 maxInput.step = param.step || ((param.max - param.min) / 100);
-                maxInput.value = param.max;
+                maxInput.value = param.lfo.max;
                 maxInput.style.display = 'none'; // hidden initially
                 maxInput.id = `param-max-${param.id}`;
                 maxInput.style.zIndex = '5';
@@ -653,6 +723,7 @@ function buildUI(sketchParams) {
                 const lfoInput = document.createElement('input');
                 lfoInput.type = 'checkbox';
                 lfoInput.style.marginRight = '6px';
+                lfoInput.checked = param.lfo.enabled;
 
                 lfoToggleWrapper.appendChild(lfoInput);
                 lfoToggleWrapper.appendChild(document.createTextNode('Modulate (LFO)'));
@@ -674,7 +745,7 @@ function buildUI(sketchParams) {
                     const opt = document.createElement('option');
                     opt.value = v;
                     opt.innerText = v + 'x';
-                    if (v === 1) opt.selected = true;
+                    if (v === param.lfo.speed) opt.selected = true;
                     speedSelect.appendChild(opt);
                 });
                 speedSelect.addEventListener('change', (e) => param.lfo.speed = parseFloat(e.target.value));
@@ -699,6 +770,10 @@ function buildUI(sketchParams) {
                         valDisplay.innerText = input.value;
                     }
                 });
+
+                if (param.lfo.enabled) {
+                    lfoInput.dispatchEvent(new Event('change'));
+                }
 
                 mainGroup.appendChild(sliderContainer);
                 mainGroup.appendChild(lfoHeader);
@@ -986,7 +1061,150 @@ async function loadAndRunSketch() {
     currentP5 = new p5(sketchEngine);
 }
 
+// URL Preset Hooks
+function serializeState() {
+    let state = {
+        s: currentSketchPath,
+        p: paletteSelect.selectedIndex,
+        fmt: document.getElementById('format-select').value,
+        dur: document.getElementById('duration-select').value,
+        lps: document.getElementById('loops-select').value,
+        fx: [ppSettings.crt ? 1 : 0, ppSettings.flipX ? 1 : 0, ppSettings.flipY ? 1 : 0, ppSettings.bloom]
+    };
+
+    const origRaw = coreSketchesRaw[currentSketchPath] || localSketchesRaw[currentSketchPath];
+    const currentRaw = sketchRawRegistry[currentSketchPath];
+
+    if (currentSketchPath.startsWith('local_upload_') || (currentRaw && origRaw && currentRaw !== origRaw)) {
+        state.raw = currentRaw;
+    } 
+    
+    if (activeSketch && activeSketch.parameters) {
+        let diffParams = {};
+        activeSketch.parameters.forEach(paramDef => {
+            let pid = paramDef.id;
+            let current = params[pid];
+            let isDiff = current !== paramDef.default;
+            
+            let lfoDiff = false;
+            if (paramDef.type === 'slider' && paramDef.lfo) {
+                if (paramDef.lfo.enabled !== false || 
+                    paramDef.lfo.min !== paramDef.min || 
+                    paramDef.lfo.max !== paramDef.max || 
+                    paramDef.lfo.speed !== 1) {
+                    lfoDiff = true;
+                }
+            }
+            
+            if (isDiff || lfoDiff) {
+                diffParams[pid] = { v: current };
+                if (lfoDiff) {
+                    diffParams[pid].lfo = [
+                        paramDef.lfo.enabled ? 1 : 0,
+                        paramDef.lfo.min,
+                        paramDef.lfo.max,
+                        paramDef.lfo.speed
+                    ];
+                }
+            }
+        });
+        if (Object.keys(diffParams).length > 0) state.pm = diffParams;
+    }
+
+    let jsonStr = JSON.stringify(state);
+    return window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(jsonStr);
+}
+
+function deserializeState(encodedStr) {
+    try {
+        let jsonStr = window.LZString ? window.LZString.decompressFromEncodedURIComponent(encodedStr) : atob(encodedStr);
+        if (!jsonStr) return false;
+        let state = JSON.parse(jsonStr);
+
+        if (state.s) {
+            currentSketchPath = state.s;
+            sketchSelect.value = state.s;
+        }
+
+        if (state.fmt) {
+            document.getElementById('format-select').value = state.fmt;
+            document.getElementById('format-select').dispatchEvent(new Event('change'));
+        }
+        if (state.dur) {
+            document.getElementById('duration-select').value = state.dur;
+            document.getElementById('duration-select').dispatchEvent(new Event('change'));
+        }
+        if (state.lps) {
+            document.getElementById('loops-select').value = state.lps;
+            document.getElementById('loops-select').dispatchEvent(new Event('change'));
+        }
+
+        if (state.fx) {
+            document.getElementById('crtEffect').checked = state.fx[0] === 1;
+            document.getElementById('flipX').checked = state.fx[1] === 1;
+            document.getElementById('flipY').checked = state.fx[2] === 1;
+            document.getElementById('globalBloom').value = state.fx[3];
+            document.getElementById('globalBloom-display').innerText = state.fx[3];
+            ppSettings.crt = state.fx[0] === 1;
+            ppSettings.flipX = state.fx[1] === 1;
+            ppSettings.flipY = state.fx[2] === 1;
+            ppSettings.bloom = parseFloat(state.fx[3]);
+        }
+
+        if (state.raw) {
+            sketchRegistry[currentSketchPath] = parseSketchString(state.raw);
+            sketchRawRegistry[currentSketchPath] = state.raw;
+        } else if (sketchRawRegistry[currentSketchPath]) {
+            // Hot-reload fresh copy to avoid mutating cache defaults
+            sketchRegistry[currentSketchPath] = parseSketchString(sketchRawRegistry[currentSketchPath]);
+        }
+        
+        activeSketch = sketchRegistry[currentSketchPath];
+        if (state.pm && activeSketch && activeSketch.parameters) {
+            activeSketch.parameters.forEach(paramDef => {
+                let pid = paramDef.id;
+                if (state.pm[pid]) {
+                    paramDef.default = state.pm[pid].v;
+                    if (state.pm[pid].lfo && paramDef.type === 'slider') {
+                        paramDef.lfo = {
+                            enabled: state.pm[pid].lfo[0] === 1,
+                            min: state.pm[pid].lfo[1],
+                            max: state.pm[pid].lfo[2],
+                            speed: state.pm[pid].lfo[3]
+                        };
+                    }
+                }
+            });
+        }
+        
+        // Ensure palette restores after setting activeSketch
+        if (state.p !== undefined) {
+            paletteSelect.selectedIndex = state.p;
+            currentPalette = (paletteSelect.value === 'custom') 
+                ? [customColorInputs[0].value, customColorInputs[1].value, customColorInputs[2].value, customColorInputs[3].value] 
+                : palettes[paletteSelect.value].colors;
+            updatePalettePreview();
+            
+            if (paletteSelect.value === 'custom') {
+                customColorsGroup.style.display = 'block';
+            } else {
+                customColorsGroup.style.display = 'none';
+            }
+        }
+        
+        return true;
+    } catch (e) {
+        console.warn("Failed to deserialize preset URL:", e);
+        return false;
+    }
+}
+
 // Initial Bootup Sequence
+const urlParams = new URLSearchParams(window.location.search);
+const presetCode = urlParams.get('preset');
+if (presetCode) {
+    deserializeState(presetCode);
+}
 loadAndRunSketch();
 
 // Internal Reference for uploading
