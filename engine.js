@@ -14,7 +14,6 @@ let numLoops = 1;
 let totalFrames = durationSecs * fps;
 
 import p5 from 'p5';
-import WebMWriter from 'webm-writer';
 
 const localPalettes = import.meta.glob('./.local/palettes/*.json', { eager: true });
 
@@ -321,7 +320,7 @@ function handleVideoBlob(blob) {
 
     // Re-bind download button actively to ensure fresh link mapping
     btnDownload.onclick = async () => {
-        const defaultName = 'genloops_export_' + Date.now() + '.webm';
+        const defaultName = 'genloops_export_' + Date.now() + '.mp4';
 
         try {
             // Force a 'Save As' native OS dialog using the modern File System Access API
@@ -329,8 +328,8 @@ function handleVideoBlob(blob) {
                 const handle = await window.showSaveFilePicker({
                     suggestedName: defaultName,
                     types: [{
-                        description: 'WebM Video',
-                        accept: { 'video/webm': ['.webm'] },
+                        description: 'MP4 Video',
+                        accept: { 'video/mp4': ['.mp4'] },
                     }],
                 });
                 const writable = await handle.createWritable();
@@ -354,7 +353,7 @@ function handleVideoBlob(blob) {
 
     btnExport.innerText = 'Render Complete!';
     setTimeout(() => {
-        btnExport.innerText = 'Render (WebM)';
+        btnExport.innerText = 'Render (MP4)';
         btnExport.style.backgroundColor = '';
         btnExport.style.color = '';
     }, 2000);
@@ -372,40 +371,65 @@ btnExport.addEventListener('click', async () => {
     // Retrieve the user's desired resolution scale profile
     const exportConfig = document.getElementById('export-scale').value;
 
-    // Default to Standard Web (1080p, heavily compressed to ~12MB)
+    // Default to Standard Web (1080p Web-Optimized)
     let exportScale = 1.0;
-    let exportQuality = 0.35;
+    let exportBitrate = 8_000_000; // 8 Mbps Default (~8-15MB constraint)
 
-    if (exportConfig === 'master') {
-        // NLE Master: 1080p uncompressed (~40MB)
+    if (exportConfig === 'uncompressed') {
+        // Uncompressed: 1080p uncompressed equivalent
         exportScale = 1.0;
-        exportQuality = 0.98;
+        exportBitrate = 35_000_000; // 35 Mbps for absolute highest fidelity (~40-60MB)
     } else if (exportConfig === 'small') {
-        // Social Fast: 540p compressed (~7MB)
+        // Social Fast: 540p compressed
         exportScale = 0.5;
-        exportQuality = 0.80;
+        exportBitrate = 2_500_000; // 2.5 Mbps suitable for 540p mobile HQ (~2-6MB)
     }
 
     isRecording = true;
     currentFrame = 0;
 
-    // Create new WebM renderer natively
-    const videoWriter = new WebMWriter({
-        quality: exportQuality,
-        frameRate: fps
-    });
-
     btnExport.style.backgroundColor = '#d90000';
     btnExport.style.color = '#fff';
+
+    const expWidth = Math.floor(currentWidth * exportScale);
+    const expHeight = Math.floor(currentHeight * exportScale);
+
+    // WebCodecs requires widths/heights to be multiples of 2.
+    const safeWidth = expWidth % 2 === 0 ? expWidth : expWidth - 1;
+    const safeHeight = expHeight % 2 === 0 ? expHeight : expHeight - 1;
+
+    let muxer = new Mp4Muxer.Muxer({
+        target: new Mp4Muxer.ArrayBufferTarget(),
+        video: {
+            codec: 'avc',
+            width: safeWidth,
+            height: safeHeight
+        },
+        fastStart: 'in-memory'
+    });
+
+    let videoEncoder = new VideoEncoder({
+        output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+        error: e => console.error("WebCodecs Encoding Error:", e)
+    });
+
+    videoEncoder.configure({
+        codec: 'avc1.4d002a', // Main Profile, Level 4.2
+        width: safeWidth,
+        height: safeHeight,
+        hardwareAcceleration: "prefer-hardware",
+        bitrate: exportBitrate,
+        framerate: fps
+    });
 
     // Set up interceptor canvas if downscaling is requested (e.g. 1080p -> 540p)
     let exportCanvas = pInstance.domCanvas;
     let tempCtx = null;
     if (exportScale < 1.0) {
         exportCanvas = document.createElement('canvas');
-        exportCanvas.width = Math.floor(currentWidth * exportScale);
-        exportCanvas.height = Math.floor(currentHeight * exportScale);
-        tempCtx = exportCanvas.getContext('2d');
+        exportCanvas.width = safeWidth;
+        exportCanvas.height = safeHeight;
+        tempCtx = exportCanvas.getContext('2d', { willReadFrequently: true });
     }
 
     // Offline deterministic loop
@@ -413,29 +437,44 @@ btnExport.addEventListener('click', async () => {
         currentFrame = f;
 
         // Setup state for the current frame progression and definitively compose all layers
-        pInstance.draw(); 
+        pInstance.draw();
+
+        // Force a 0ms yield to allow the browser GPU to definitively flush the drawn pixels 
+        // to the canvas before we rip it into the video encoder
+        await new Promise(r => setTimeout(r, 0));
+
+        let frameTimeMicroSecs = (f * 1e6) / fps;
 
         if (exportScale < 1.0) {
-            tempCtx.drawImage(pInstance.domCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
-            videoWriter.addFrame(exportCanvas);
+            tempCtx.drawImage(pInstance.domCanvas, 0, 0, safeWidth, safeHeight);
+            let frame = new VideoFrame(exportCanvas, { timestamp: frameTimeMicroSecs });
+            videoEncoder.encode(frame);
+            frame.close();
         } else {
-            videoWriter.addFrame(pInstance.domCanvas);
+            let frame = new VideoFrame(pInstance.domCanvas, { timestamp: frameTimeMicroSecs });
+            videoEncoder.encode(frame);
+            frame.close();
         }
 
         const pct = Math.floor((f / totalFrames) * 100);
         btnExport.innerText = `Recording: ${pct}%`;
-        
-        // Yield to the browser's main thread to allow the progress UI to paint and the WebP encoder to breathe
+
+        // Yield to the browser's main thread to allow the progress UI to paint and the WebCodecs encoder to breathe
+        await videoEncoder.flush();
         await new Promise(r => window.requestAnimationFrame(r));
     }
 
-    btnExport.innerText = 'Finalizing HD File...';
+    btnExport.innerText = 'Finalizing MP4 File...';
     await new Promise(r => setTimeout(r, 10)); // Yield for UI update
 
-    videoWriter.complete().then(function (webMBlob) {
-        handleVideoBlob(webMBlob);
-        isRecording = false;
-    });
+    await videoEncoder.flush();
+    videoEncoder.close();
+    muxer.finalize();
+
+    // Create the Blob from Mp4Muxer Target
+    const mp4Blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+    handleVideoBlob(mp4Blob);
+    isRecording = false;
 });
 
 function parseSketchString(rawText) {
@@ -443,10 +482,10 @@ function parseSketchString(rawText) {
     let name = "Custom Sandbox Sketch";
     let desc = "";
     let mode = "P2D";
-    
+
     const nameMatch = rawText.match(/@name\s+"([^"]+)"/);
     if (nameMatch) name = nameMatch[1];
-    
+
     const modeMatch = rawText.match(/@mode\s+"([^"]+)"/i);
     if (modeMatch) mode = modeMatch[1].toUpperCase();
 
@@ -467,7 +506,7 @@ function parseSketchString(rawText) {
         }
         params.push(p);
     }
-    
+
     return {
         isSandboxed: true,
         name: name,
@@ -475,8 +514,8 @@ function parseSketchString(rawText) {
         mode: mode,
         parameters: params,
         rawCode: rawText,
-        setup: () => {},
-        draw: () => {}
+        setup: () => { },
+        draw: () => { }
     };
 }
 
@@ -574,7 +613,7 @@ function buildUI(sketchParams) {
                     const maxP = range === 0 ? 0 : (param.lfo.max - param.min) / range * 100;
                     highlight.style.left = minP + '%';
                     highlight.style.width = (maxP - minP) + '%';
-                    
+
                     valDisplay.innerText = `${Number(param.lfo.min).toFixed(2)} ⟷ ${Number(param.lfo.max).toFixed(2)}`;
                 };
 
@@ -707,26 +746,26 @@ async function loadAndRunSketch() {
     buildUI(activeSketch.parameters);
 
     // Always use sandbox mode now
-        // 3. Determine necessary rendering context mode (default P2D)
-        let renderMode = activeSketch.mode === 'WEBGL' ? 'webgl' : 'p2d';
+    // 3. Determine necessary rendering context mode (default P2D)
+    let renderMode = activeSketch.mode === 'WEBGL' ? 'webgl' : 'p2d';
 
-        const initialCtx = JSON.stringify({
-            progress: 0,
-            palette: currentPalette && currentPalette.length > 0 ? currentPalette : ['#000', '#fff', '#fff', '#fff'],
-            params: params || {}
-        });
+    const initialCtx = JSON.stringify({
+        progress: 0,
+        palette: currentPalette && currentPalette.length > 0 ? currentPalette : ['#000', '#fff', '#fff', '#fff'],
+        params: params || {}
+    });
 
-        // 4. If Sandboxed, boot up the hidden Sandbox IFrame environment natively
-        window.sandboxIframe = document.createElement('iframe');
-        // Critical Fix: Do NOT use display:none or the Chromium GPU culls rendering inside the iframe!
-        window.sandboxIframe.style.position = 'absolute';
-        window.sandboxIframe.style.left = '-9999px';
-        window.sandboxIframe.style.top = '-9999px';
-        window.sandboxIframe.style.visibility = 'hidden';
-        window.sandboxIframe.style.width = currentWidth + 'px';
-        window.sandboxIframe.style.height = currentHeight + 'px';
-        
-        const srcdoc = `
+    // 4. If Sandboxed, boot up the hidden Sandbox IFrame environment natively
+    window.sandboxIframe = document.createElement('iframe');
+    // Critical Fix: Do NOT use display:none or the Chromium GPU culls rendering inside the iframe!
+    window.sandboxIframe.style.position = 'absolute';
+    window.sandboxIframe.style.left = '-9999px';
+    window.sandboxIframe.style.top = '-9999px';
+    window.sandboxIframe.style.visibility = 'hidden';
+    window.sandboxIframe.style.width = currentWidth + 'px';
+    window.sandboxIframe.style.height = currentHeight + 'px';
+
+    const srcdoc = `
             <!DOCTYPE html>
             <html>
             <head>
@@ -777,9 +816,9 @@ async function loadAndRunSketch() {
             </body>
             </html>
         `;
-        window.sandboxIframe.srcdoc = srcdoc;
-        document.body.appendChild(window.sandboxIframe);
-        window.sandboxIframeWindow = window.sandboxIframe.contentWindow;
+    window.sandboxIframe.srcdoc = srcdoc;
+    document.body.appendChild(window.sandboxIframe);
+    window.sandboxIframeWindow = window.sandboxIframe.contentWindow;
 
     // 4. Build the new engine enclosure
     const sketchEngine = (p) => {
@@ -840,10 +879,10 @@ async function loadAndRunSketch() {
 
                         // Interpolate strictly between user-defined Min and Max bounds
                         let newVal = param.lfo.min + (param.lfo.max - param.lfo.min) * modPhase;
-                    
+
                         // We purposefully bypass `param.step` quantization during LFO modulation
                         // to ensure perfectly smooth organic floating-point transitions!
-                    
+
                         modulatedParams[param.id] = newVal;
                     }
                 });
@@ -887,7 +926,7 @@ async function loadAndRunSketch() {
                 if (iframeCanvas) {
                     // Apply Global Mirrors and Scale natively BEFORE shaders so shaders (like scanlines) don't get warped or mirrored
                     pgMain.drawingContext.save();
-                    
+
                     let sX = (ppSettings.flipX ? -1 : 1) * globalScale;
                     let sY = (ppSettings.flipY ? -1 : 1) * globalScale;
 
@@ -909,33 +948,33 @@ async function loadAndRunSketch() {
             // 2. Cascade through the Hardware-Accelerated Post-Processing Pipeline
             let finalComposite = pgMain;
 
-                if (ppSettings.bloom > 0) {
-                    pgBloom.clear();
-                    pgBloom.drawingContext.filter = `blur(${ppSettings.bloom}px)`;
-                    pgBloom.drawingContext.drawImage(pgMain.canvas, 0, 0, currentWidth, currentHeight);
-                    pgBloom.drawingContext.filter = 'none';
+            if (ppSettings.bloom > 0) {
+                pgBloom.clear();
+                pgBloom.drawingContext.filter = `blur(${ppSettings.bloom}px)`;
+                pgBloom.drawingContext.drawImage(pgMain.canvas, 0, 0, currentWidth, currentHeight);
+                pgBloom.drawingContext.filter = 'none';
 
-                    pgBloom.blendMode(p.ADD);
-                    pgBloom.image(pgMain, 0, 0);
-                    pgBloom.blendMode(p.BLEND);
+                pgBloom.blendMode(p.ADD);
+                pgBloom.image(pgMain, 0, 0);
+                pgBloom.blendMode(p.BLEND);
 
-                    finalComposite = pgBloom;
-                }
+                finalComposite = pgBloom;
+            }
 
-                if (ppSettings.crt) {
-                    pgCRT.clear();
-                    pgCRT.shader(crtShader);
-                    crtShader.setUniform('tex0', finalComposite);
-                    crtShader.setUniform('curvature', 5.0);
-                    pgCRT.noStroke();
-                    // WebGL coordinates are center-origin
-                    pgCRT.rect(-currentWidth / 2, -currentHeight / 2, currentWidth, currentHeight);
+            if (ppSettings.crt) {
+                pgCRT.clear();
+                pgCRT.shader(crtShader);
+                crtShader.setUniform('tex0', finalComposite);
+                crtShader.setUniform('curvature', 5.0);
+                pgCRT.noStroke();
+                // WebGL coordinates are center-origin
+                pgCRT.rect(-currentWidth / 2, -currentHeight / 2, currentWidth, currentHeight);
 
-                    finalComposite = pgCRT;
-                }
+                finalComposite = pgCRT;
+            }
 
-                // Flush the final post-processed composite back out to the main WebM export canvas!
-                p.image(finalComposite, 0, 0, currentWidth, currentHeight);
+            // Flush the final post-processed composite back out to the main WebM export canvas!
+            p.image(finalComposite, 0, 0, currentWidth, currentHeight);
 
             if (!isRecording) {
                 currentFrame++;
@@ -978,7 +1017,7 @@ uploadSketchInput.addEventListener('change', async (e) => {
     currentSketchPath = newPath;
     localStorage.setItem('genloops_last_sketch', newPath);
     editorInstance.setValue(sketchText);
-    
+
     loadAndRunSketch();
 });
 
@@ -1011,7 +1050,7 @@ btnEditorToggle.addEventListener('click', () => {
 });
 
 const btnInsertJsdoc = document.getElementById('btn-insert-jsdoc');
-if(btnInsertJsdoc) {
+if (btnInsertJsdoc) {
     btnInsertJsdoc.addEventListener('click', () => {
         const boilerplate = `/**
  * @name "My Custom Sketch"
@@ -1095,9 +1134,9 @@ setTimeout(() => {
 
 btnEditorRun.addEventListener('click', async () => {
     const sketchCode = editorInstance.getValue();
-    
+
     sketchRegistry[currentSketchPath] = parseSketchString(sketchCode);
-    
+
     // Save to current path in registry
     sketchRawRegistry[currentSketchPath] = sketchCode;
     localStorage.setItem('genloops_draft_' + currentSketchPath, sketchCode);

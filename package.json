@@ -1,8 +1,7 @@
 {
   "dependencies": {
     "p5": "^2.2.2",
-    "puppeteer": "^24.40.0",
-    "webm-writer": "^1.0.0"
+    "puppeteer": "^24.40.0"
   },
   "name": "genloops",
   "version": "1.0.0",

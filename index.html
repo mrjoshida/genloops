@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/monokai.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+    <script src="https://unpkg.com/mp4-muxer/build/mp4-muxer.js"></script>
 </head>
 <style>
         .checkbox-group label { margin: 0; }
@@ -139,12 +140,12 @@
             <div class="control-group" style="margin-top: 25px;">
                 <label for="export-scale" style="margin-bottom:5px; display:block;">Export Resolution & Quality</label>
                 <select id="export-scale" style="width:100%; margin-bottom: 15px;">
-                    <option value="small">540p ∙ Social Fast (~7MB)</option>
-                    <option value="standard" selected>1080p ∙ Standard Web (~12MB)</option>
-                    <option value="master">1080p ∙ NLE Master (~40MB)</option>
+                    <option value="small">540p ∙ Social Fast (~3MB)</option>
+                    <option value="standard" selected>1080p ∙ Standard Web (~10MB)</option>
+                    <option value="uncompressed">1080p ∙ Uncompressed (~40MB)</option>
                 </select>
                 <button id="btn-play" style="width: 100%; margin-bottom: 10px;">Pause</button>
-                <button id="btn-export" style="width: 100%; background-color: #555;">Render (WebM)</button>
+                <button id="btn-export" style="width: 100%; background-color: #555;">Render (MP4)</button>
             </div>
         </aside>
 
@@ -192,7 +193,7 @@
         <h2 style="color: white; margin-bottom: 20px; font-family: sans-serif;">Loop Preview</h2>
         <video id="preview-video" autoplay loop src="" style="max-height: 70vh; max-width: 90vw; background: #000; border: 2px solid #555; border-radius: 8px;"></video>
         <div style="margin-top: 20px; display: flex; gap: 15px;">
-            <button id="btn-download" style="background-color: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">Download WebM</button>
+            <button id="btn-download" style="background-color: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">Download MP4</button>
             <button id="btn-close-preview" style="background-color: #f44336; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">Close Preview</button>
         </div>
     </div>
