@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generative Canvas Framework</title>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+    <link rel="stylesheet" href="style.css">
+    <!-- CodeMirror 5 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/monokai.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+</head>
+<style>
+        .checkbox-group label { margin: 0; }
+        .checkbox-group input { margin: 0; }
+    </style>
+<body>
+    <div id="app-container">
+        <!-- The UI Panel -->
+        <aside id="ui-panel">
+            <h1>GenLoops</h1>
+            <div class="control-group">
+                <label for="sketch-select">Sketch Module</label>
+                <div style="display: flex; gap: 8px;">
+                    <select id="sketch-select" style="flex-grow: 1;">
+                        <option value="">Loading Sketches...</option>
+                    </select>
+                </div>
+            </div>
+
+            <details open class="panel-section">
+                <summary>Format & Timing</summary>
+                <div class="control-group">
+                    <label for="format-select">Format</label>
+                    <select id="format-select">
+                        <option value="9:16">Portrait (9:16) - 1080x1920</option>
+                        <option value="16:9">Widescreen (16:9) - 1920x1080</option>
+                        <option value="1:1">Square (1:1) - 1080x1080</option>
+                        <option value="4:5">Social Post (4:5) - 1080x1350</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="duration-select">Duration</label>
+                    <select id="duration-select">
+                        <option value="8">8s (Spotify Canvas)</option>
+                        <option value="15">15s (Shorts / Reels)</option>
+                        <option value="30">30s (Extended)</option>
+                        <option value="60">60s (Full Minute)</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="loops-select">Loop Density</label>
+                    <select id="loops-select">
+                        <option value="1">1 Continuous Loop</option>
+                        <option value="2">2 Loops</option>
+                        <option value="3">3 Loops</option>
+                        <option value="4">4 Loops</option>
+                        <option value="8">8 Fast Loops</option>
+                    </select>
+                </div>
+            </details>
+
+            <details class="panel-section">
+                <summary>Global Environment</summary>
+                
+                <div class="control-group">
+                    <label for="scale-slider">Global Scale</label>
+                    <div style="display: flex; align-items: center;">
+                        <input type="range" id="scale-slider" min="0.1" max="3.0" step="0.1" value="1.0" style="flex-grow: 1;">
+                        <span id="scale-display" style="font-size: 0.8rem; margin-left: 10px; min-width: 25px;">1.0</span>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label for="palette-select">Color Palette</label>
+                    <select id="palette-select">
+                        <option value="moody">Moody Cinematic</option>
+                        <option value="grayscale">High-Contrast Grayscale</option>
+                        <option value="cyberpunk">Neon Cyberpunk</option>
+                        <option value="earthy">Earthy Nostalgia</option>
+                        <option value="lofi">Lo-Fi Pastels</option>
+                        <option value="psychedelic">Psychedelic Vibrant</option>
+                        <option value="custom">Custom Colors</option>
+                    </select>
+                </div>
+
+                <div id="custom-colors-group" class="control-group" style="display: none;">
+                    <label>Custom Colors</label>
+                    <div style="display: flex; gap: 5px; margin-top: 5px;">
+                        <input type="color" id="custom-color-1" value="#000000" style="width: 100%; height: 30px; padding: 0; border: none; cursor: pointer;">
+                        <input type="color" id="custom-color-2" value="#FFFFFF" style="width: 100%; height: 30px; padding: 0; border: none; cursor: pointer;">
+                        <input type="color" id="custom-color-3" value="#FF0000" style="width: 100%; height: 30px; padding: 0; border: none; cursor: pointer;">
+                        <input type="color" id="custom-color-4" value="#0000FF" style="width: 100%; height: 30px; padding: 0; border: none; cursor: pointer;">
+                    </div>
+                </div>
+
+                <div id="post-processing-controls">
+                    <div class="control-group">
+                        <label for="globalBloom">Global Bloom Intensity</label>
+                        <div style="display: flex; align-items: center;">
+                            <input type="range" id="globalBloom" min="0" max="50" step="1" value="15" style="flex-grow: 1;">
+                            <span id="globalBloom-display" style="font-size: 0.8rem; margin-left: 10px; min-width: 25px;">15</span>
+                        </div>
+                    </div>
+                    <div class="control-group" style="padding-top: 5px;">
+                        <label for="crtEffect" style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="crtEffect" style="margin-right: 10px;">
+                            Enable CRT Fisheye Lens
+                        </label>
+                    </div>
+                    <div class="control-group" style="margin-top: -10px;">
+                        <label style="display:flex; align-items:center; cursor:pointer;">
+                            <input type="checkbox" id="flipX" style="margin-right:10px;">
+                            Mirror Output (Horizontal)
+                        </label>
+                    </div>
+                    <div class="control-group" style="margin-top: -10px;">
+                        <label style="display:flex; align-items:center; cursor:pointer;">
+                            <input type="checkbox" id="flipY" style="margin-right:10px;">
+                            Mirror Output (Vertical)
+                        </label>
+                    </div>
+                </div>
+            </details>
+
+            <details open class="panel-section">
+                <summary>Sketch Parameters</summary>
+                <div id="dynamic-controls">
+                    <!-- Dynamically generated controls go here -->
+                </div>
+            </details>
+
+            <div style="flex-grow: 1;"></div>
+
+            <div class="control-group" style="margin-top: 25px;">
+                <label for="export-scale" style="margin-bottom:5px; display:block;">Export Resolution & Quality</label>
+                <select id="export-scale" style="width:100%; margin-bottom: 15px;">
+                    <option value="small">540p ∙ Social Fast (~7MB)</option>
+                    <option value="standard" selected>1080p ∙ Standard Web (~12MB)</option>
+                    <option value="master">1080p ∙ NLE Master (~40MB)</option>
+                </select>
+                <button id="btn-play" style="width: 100%; margin-bottom: 10px;">Pause</button>
+                <button id="btn-export" style="width: 100%; background-color: #555;">Render (WebM)</button>
+            </div>
+        </aside>
+
+        <!-- Editor Panel -->
+        <div id="editor-panel">
+            <button id="btn-editor-toggle" aria-label="Toggle Sketch Editor" title="Toggle Editor" style="position: absolute; left: -40px; top: 15px; width: 40px; height: 40px; background: rgba(30, 30, 30, 0.9); border: 1px solid #333; border-right: none; border-radius: 8px 0 0 8px; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 52;">
+                <svg id="icon-collapse" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6z"/></svg>
+                <svg id="icon-expand" viewBox="0 0 24 24" width="24" fill="currentColor" style="display:none;"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+            </button>
+            <div class="editor-header">
+                <h3 style="margin: 0; color: #fff; display: flex; align-items: center; gap: 10px;">
+                    SKETCH EDITOR
+                    <span id="editor-status-badge" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: #666; font-weight: normal;">Built-in</span>
+                </h3>
+                <div style="display: flex; gap: 8px;">
+                    <input type="file" id="upload-sketch-input" accept=".js" style="display: none;">
+                    <button id="btn-upload-sketch" title="Upload Custom Script (.js)" aria-label="Upload Script" class="icon-btn">
+                        <svg viewBox="0 0 24 24" width="18" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
+                    </button>
+                    <button id="btn-insert-jsdoc" title="Insert Boilerplate (JSDoc)" aria-label="Insert Boilerplate" class="icon-btn" style="color: #66FCF1; border-color: #66FCF1;">
+                        <svg viewBox="0 0 24 24" width="18" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                    </button>
+                    <button id="btn-editor-run" title="Run Code" aria-label="Run Code" class="icon-btn run-btn">
+                        <svg viewBox="0 0 24 24" width="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                    <button id="btn-editor-revert" title="Revert to Original" aria-label="Revert" class="icon-btn" style="display:none; color: #ff9800; border-color: #ff9800;">
+                        <svg viewBox="0 0 24 24" width="18" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+                    </button>
+                    <button id="btn-editor-save" title="Export Draft As..." aria-label="Export" class="icon-btn">
+                        <svg viewBox="0 0 24 24" width="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="editor-container"></div>
+        </div>
+
+        <!-- Canvas Container -->
+        <main id="canvas-container">
+            <!-- p5 canvas injected here -->
+        </main>
+    </div>
+
+    <!-- Loop Preview Modal -->
+    <div id="preview-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; flex-direction: column;">
+        <h2 style="color: white; margin-bottom: 20px; font-family: sans-serif;">Loop Preview</h2>
+        <video id="preview-video" autoplay loop src="" style="max-height: 70vh; max-width: 90vw; background: #000; border: 2px solid #555; border-radius: 8px;"></video>
+        <div style="margin-top: 20px; display: flex; gap: 15px;">
+            <button id="btn-download" style="background-color: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">Download WebM</button>
+            <button id="btn-close-preview" style="background-color: #f44336; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">Close Preview</button>
+        </div>
+    </div>
+
+    <!-- Load Engine -->
+    <script type="module" src="engine.js"></script>
+</body>
+</html>

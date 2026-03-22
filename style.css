@@ -1,0 +1,338 @@
+:root {
+    --bg-color: #121212;
+    --panel-bg: #1e1e1e;
+    --text-color: #ededed;
+    --accent-color: #00ffcc;
+    --border-color: #333;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+}
+
+#app-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+#ui-panel {
+    width: 320px;
+    height: 100%;
+    background-color: var(--panel-bg);
+    border-right: 1px solid var(--border-color);
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+h1 {
+    margin-top: 0;
+    font-size: 1.5rem;
+    color: var(--accent-color);
+    margin-bottom: 30px;
+}
+
+h3 {
+    font-size: 1rem;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+}
+
+.control-group {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.control-group label {
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+select, input[type="range"] {
+    width: 100%;
+    padding: 8px;
+    background: #2a2a2a;
+    border: 1px solid var(--border-color);
+    color: white;
+    border-radius: 4px;
+}
+
+.control-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+button {
+    background: var(--accent-color);
+    color: #000;
+    border: none;
+    padding: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 20px 0;
+}
+
+#canvas-container {
+    flex-grow: 1;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 40px;
+    background-color: #000;
+    overflow: hidden;
+}
+
+#canvas-container canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: left center;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8);
+}
+
+/* Editor Panel Styles */
+#editor-panel {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 600px;
+    min-width: 400px;
+    max-width: 90vw;
+    height: 100%;
+    background-color: rgba(39, 40, 34, 0.85); /* Translucent Monokai */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-left: 1px solid var(--border-color);
+    z-index: 50;
+    resize: horizontal;
+    direction: rtl; /* Hack to put resize handle on the left edge */
+    overflow: visible; /* we need the toggle button to stick out of the left */
+    transform: translateX(0);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+#editor-panel.collapsed {
+    transform: translateX(100%);
+    resize: none;
+}
+
+#editor-panel > * {
+    direction: ltr; /* Reset text direction for children */
+}
+
+.editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: rgba(30, 30, 30, 0.9);
+    border-bottom: 1px solid #333;
+    z-index: 51;
+}
+
+.icon-btn {
+    background: transparent;
+    border: 1px solid #444;
+    color: #ccc;
+    padding: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+.icon-btn:hover {
+    background: #444;
+    color: #fff;
+}
+.icon-btn.run-btn {
+    border-color: #00ffcc;
+    color: #00ffcc;
+}
+.icon-btn.run-btn:hover {
+    background: #00ffcc;
+    color: #000;
+}
+.icon-btn.active {
+    background: #555;
+    color: #fff;
+}
+
+#editor-container {
+    flex-grow: 1;
+    overflow: hidden;
+    position: relative;
+    background: transparent;
+}
+
+.CodeMirror {
+    position: absolute !important;
+    top: 0; left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    font-size: 14px;
+    line-height: 1.4;
+    background: transparent !important;
+}
+
+.CodeMirror-gutters {
+    background: rgba(39, 40, 34, 0.5) !important;
+    border-right: 1px solid #444;
+}
+
+/* Sidebar Collapsible Panels */
+details.panel-section {
+    background-color: transparent;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+}
+
+details.panel-section > summary {
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-color);
+    padding: 8px 0;
+    cursor: pointer;
+    list-style: none; /* Hide default triangle */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: color 0.2s;
+}
+
+details.panel-section > summary::-webkit-details-marker {
+    display: none;
+}
+
+details.panel-section > summary:hover {
+    color: #fff;
+}
+
+/* Custom Chevron for Summary */
+details.panel-section > summary::after {
+    content: "▼";
+    font-size: 0.7rem;
+    color: #888;
+    transform: rotate(-90deg);
+    transition: transform 0.2s ease-in-out;
+}
+
+details.panel-section[open] > summary::after {
+    transform: rotate(0deg);
+}
+
+details.panel-section > .control-group {
+    margin-top: 10px;
+}
+
+/* Dual Range Slider Styles */
+.dual-slider-container {
+    position: relative;
+    width: 100%;
+    height: 30px;
+    display: flex;
+    align-items: center;
+}
+
+.dual-slider-track {
+    position: absolute;
+    width: 100%;
+    height: 4px;
+    background: #444;
+    border-radius: 2px;
+    z-index: 1;
+}
+
+.dual-slider-highlight {
+    position: absolute;
+    height: 4px;
+    background: var(--accent-color);
+    border-radius: 2px;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+.dual-slider-container input[type="range"] {
+    position: absolute;
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    pointer-events: none;
+    z-index: 3;
+    margin: 0;
+    border: none;
+    padding: 0;
+    height: 30px; /* give it a touch target */
+}
+
+/* Thumb pointers need to have pointer-events auto */
+.dual-slider-container input[type="range"]::-webkit-slider-thumb {
+    pointer-events: auto;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    border: 2px solid #222;
+    box-shadow: 0 0 5px rgba(0,0,0,0.8);
+    transition: background 0.1s;
+}
+
+.dual-slider-container input[type="range"]::-webkit-slider-thumb:hover {
+    background: var(--accent-color);
+}
+
+.dual-slider-container input[type="range"]::-moz-range-thumb {
+    pointer-events: auto;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    border: 2px solid #222;
+    box-shadow: 0 0 5px rgba(0,0,0,0.8);
+    transition: background 0.1s;
+}
+
+.dual-slider-container input[type="range"]::-moz-range-thumb:hover {
+    background: var(--accent-color);
+}
