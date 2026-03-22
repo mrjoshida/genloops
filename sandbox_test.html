@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<body>
+<iframe id="sf" sandbox="allow-scripts"></iframe>
+<script>
+const sf = document.getElementById('sf');
+sf.srcdoc = "<script>window.parent.postMessage('hello', '*');<\/script>";
+window.onmessage = (e) => console.log('received:', e.data);
+</script>
+</body>
+</html>

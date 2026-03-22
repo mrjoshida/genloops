@@ -101,6 +101,42 @@ allPaths.forEach(path => {
     sketchSelect.appendChild(opt);
 });
 
+const btnLoadDir = document.getElementById('btn-load-dir');
+if (btnLoadDir) {
+    btnLoadDir.addEventListener('click', async () => {
+        try {
+            const dirHandle = await window.showDirectoryPicker();
+            let addedCount = 0;
+            for await (const entry of dirHandle.values()) {
+                if (entry.kind === 'file' && entry.name.endsWith('.js')) {
+                    const file = await entry.getFile();
+                    const text = await file.text();
+                    
+                    const baseName = entry.name.replace('.js', '');
+                    const newPath = `local_dir_${baseName}`;
+
+                    sketchRegistry[newPath] = parseSketchString(text);
+                    sketchRawRegistry[newPath] = text;
+
+                    const opt = document.createElement('option');
+                    opt.value = newPath;
+                    opt.innerText = (sketchRegistry[newPath].name || baseName) + ' (Loaded)';
+                    sketchSelect.appendChild(opt);
+
+                    addedCount++;
+                }
+            }
+            if (addedCount > 0) {
+                alert(`Loaded ${addedCount} sketch(es) from folder.`);
+            } else {
+                alert('No .js files found in the selected folder.');
+            }
+        } catch (err) {
+            console.error('Directory load cancelled or failed:', err);
+        }
+    });
+}
+
 const formatSelect = document.getElementById('format-select');
 const btnPlay = document.getElementById('btn-play');
 const btnExport = document.getElementById('btn-export');
@@ -1116,6 +1152,17 @@ function serializeState() {
     return window.LZString ? window.LZString.compressToEncodedURIComponent(jsonStr) : btoa(jsonStr);
 }
 
+// Security Heuristic Scanner
+function validateSketchSecurity(rawCode) {
+    // Explicitly block cross-origin or same-origin breakout vectors
+    const forbidden = /window\.|document\.|localStorage|sessionStorage|indexedDB|cookie|fetch\(|XMLHttpRequest|parent\.|top\.|eval\(|Function\(/i;
+    if (forbidden.test(rawCode)) {
+        console.warn("Security Scanner Blocked Execution", rawCode);
+        return false;
+    }
+    return true;
+}
+
 function deserializeState(encodedStr) {
     try {
         let jsonStr = window.LZString ? window.LZString.decompressFromEncodedURIComponent(encodedStr) : atob(encodedStr);
@@ -1159,6 +1206,10 @@ function deserializeState(encodedStr) {
         }
 
         if (state.raw) {
+            if (!validateSketchSecurity(state.raw)) {
+                alert("Security Violation: This shared sketch attempted to use forbidden browser APIs and has been blocked.");
+                return false;
+            }
             sketchRegistry[currentSketchPath] = parseSketchString(state.raw);
             sketchRawRegistry[currentSketchPath] = state.raw;
         } else if (sketchRawRegistry[currentSketchPath]) {
@@ -1209,10 +1260,35 @@ function deserializeState(encodedStr) {
 // Initial Bootup Sequence
 const urlParams = new URLSearchParams(window.location.search);
 const presetCode = urlParams.get('preset');
+
 if (presetCode) {
-    deserializeState(presetCode);
+    // Hash preset to serve as a compact trusted key in localStorage
+    const hash = Array.from(presetCode).reduce((h, char) => 0 | (31 * h + char.charCodeAt(0)), 0);
+    const trustedKey = 'genloops_trusted_' + hash;
+
+    if (localStorage.getItem(trustedKey)) {
+        // Already verified by user previously
+        deserializeState(presetCode);
+        loadAndRunSketch();
+    } else {
+        const secModal = document.getElementById('security-warning-modal');
+        secModal.style.display = 'flex';
+        
+        document.getElementById('btn-security-accept').addEventListener('click', () => {
+            secModal.style.display = 'none';
+            localStorage.setItem(trustedKey, 'true'); // Remember decision
+            deserializeState(presetCode);
+            loadAndRunSketch();
+        });
+        
+        document.getElementById('btn-security-decline').addEventListener('click', () => {
+            secModal.style.display = 'none';
+            loadAndRunSketch(); // Load default local sketch instead
+        });
+    }
+} else {
+    loadAndRunSketch();
 }
-loadAndRunSketch();
 
 // Internal Reference for uploading
 const uploadSketchInput = document.getElementById('upload-sketch-input');
