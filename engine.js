@@ -1262,29 +1262,45 @@ const urlParams = new URLSearchParams(window.location.search);
 const presetCode = urlParams.get('preset');
 
 if (presetCode) {
-    // Hash preset to serve as a compact trusted key in localStorage
-    const hash = Array.from(presetCode).reduce((h, char) => 0 | (31 * h + char.charCodeAt(0)), 0);
-    const trustedKey = 'genloops_trusted_' + hash;
-
-    if (localStorage.getItem(trustedKey)) {
-        // Already verified by user previously
-        deserializeState(presetCode);
-        loadAndRunSketch();
-    } else {
-        const secModal = document.getElementById('security-warning-modal');
-        secModal.style.display = 'flex';
+    try {
+        let jsonStr = window.LZString ? window.LZString.decompressFromEncodedURIComponent(presetCode) : atob(presetCode);
+        let state = jsonStr ? JSON.parse(jsonStr) : null;
         
-        document.getElementById('btn-security-accept').addEventListener('click', () => {
-            secModal.style.display = 'none';
-            localStorage.setItem(trustedKey, 'true'); // Remember decision
+        if (state && state.raw) {
+            // Hash preset to serve as a compact trusted key in localStorage
+            const hash = Array.from(presetCode).reduce((h, char) => 0 | (31 * h + char.charCodeAt(0)), 0);
+            const trustedKey = 'genloops_trusted_' + hash;
+
+            if (localStorage.getItem(trustedKey)) {
+                // Already verified by user previously
+                deserializeState(presetCode);
+                loadAndRunSketch();
+            } else {
+                const secModal = document.getElementById('security-warning-modal');
+                secModal.style.display = 'flex';
+                
+                document.getElementById('btn-security-accept').addEventListener('click', () => {
+                    secModal.style.display = 'none';
+                    localStorage.setItem(trustedKey, 'true'); // Remember decision
+                    deserializeState(presetCode);
+                    loadAndRunSketch();
+                });
+                
+                document.getElementById('btn-security-decline').addEventListener('click', () => {
+                    secModal.style.display = 'none';
+                    loadAndRunSketch(); // Load default local sketch instead
+                });
+            }
+        } else if (state) {
+            // It's a config-only preset (no custom code changes). 100% safe to load instantly.
             deserializeState(presetCode);
             loadAndRunSketch();
-        });
-        
-        document.getElementById('btn-security-decline').addEventListener('click', () => {
-            secModal.style.display = 'none';
-            loadAndRunSketch(); // Load default local sketch instead
-        });
+        } else {
+            loadAndRunSketch();
+        }
+    } catch (e) {
+        console.warn('Failed to pre-parse preset URL for security check', e);
+        loadAndRunSketch();
     }
 } else {
     loadAndRunSketch();
