@@ -1,6 +1,6 @@
 # GenLoops: Generative Canvas Framework
 
-GenLoops is an advanced, deterministic generative art engine built on top of **p5.js**. 
+GenLoops is an educationally oriented generative art engine built on top of **p5.js** optimized for pefectly looping videos formatted for various social media platforms. 
 
 It is designed to eliminate the boilerplate of building UI controls, managing color palettes, formatting various canvas aspect ratios, and wrestling with video export pipelines. Whether you are generating 8-second repeating Spotify Canvases, 60-second social media posts, or ultra-crisp WebGL animations, GenLoops allows you to focus purely on the creative math and visual logic.
 
@@ -8,7 +8,7 @@ It is designed to eliminate the boilerplate of building UI controls, managing co
 
 ## 🎨 Core Philosophy & Features
 
-- **"Ctx" Context Object**: Instead of hardcoding logic, your sketches receive a rich context object (`ctx`) containing normalized loop `progress` (0.0 to 1.0), unified `palette` colors, and interactive `params` tied directly to the UI.
+- **"Ctx" Context Object**: Instead of hardcoding logic, sketches receive a rich context object (`ctx`) containing normalized loop `progress` (0.0 to 1.0), unified `palette` colors, and interactive `params` tied directly to the UI.
 - **Dynamic Parameter UI**: Define your variables (sliders, toggles) directly in code or JSDoc comments. The engine instantly builds a Left-Panel UI, complete with dynamic **LFO (Low Frequency Oscillator)** modulation to smoothly automate parameters over time.
 - **Hardware-Accelerated Post-Processing**: Natively apply real-time Bloom filters, mirror outputs, and authentic CRT fisheye/scanline shaders to any sketch without impacting the core drawing logic.
 - **Deterministic Offline WebM Exports**: When exporting, GenLoops pauses the live browser loop and manually advances frames asynchronously. This guarantees perfect, non-laggy, high-res 60fps renders, even for unimaginably complex WebGL raymarching routines that normally choke browser framerates.
@@ -17,7 +17,7 @@ It is designed to eliminate the boilerplate of building UI controls, managing co
 
 ## 🔧 Interactions with p5.js (Architecture Quirks)
 
-To achieve its robust export pipeline and aspect-ratio flipping, GenLoops alters a few standard p5.js conventions that you should be aware of:
+To achieve the export pipeline and aspect-ratio flipping, GenLoops alters a few standard p5.js conventions that you should be aware of:
 
 ### 1. The P2D Center Point Shift (Built-in ES Modules)
 By default, native p5.js places `(0,0)` at the top-left corner. 
