@@ -15,10 +15,10 @@ let totalFrames = durationSecs * fps;
 
 import p5 from 'p5';
 
-const localPalettes = import.meta.glob('./.local/palettes/*.json', { eager: true });
+const localPalettes = import.meta.glob('./local/palettes/*.json', { eager: true });
 
 const coreSketchesRaw = import.meta.glob('./sketches/*.js', { query: '?raw', import: 'default', eager: true });
-const localSketchesRaw = import.meta.glob('./.local/sketches/*.js', { query: '?raw', import: 'default', eager: true });
+const localSketchesRaw = import.meta.glob('./local/sketches/*.js', { query: '?raw', import: 'default', eager: true });
 
 const sketchRegistry = {};
 const sketchRawRegistry = {};
@@ -94,7 +94,7 @@ const sketchSelect = document.getElementById('sketch-select');
 sketchSelect.innerHTML = '';
 allPaths.forEach(path => {
     let name = path.split('/').pop().replace('.js', '');
-    if (path.includes('.local')) name += ' (Local)';
+    if (path.includes('/local/')) name += ' (Local)';
     const opt = document.createElement('option');
     opt.value = path;
     opt.innerText = name;

@@ -19,10 +19,10 @@ window.audioRawBuffer = null;
 
 import p5 from 'p5';
 
-const localPalettes = import.meta.glob('./.local/palettes/*.json', { eager: true });
+const localPalettes = import.meta.glob('./local/palettes/*.json', { eager: true });
 
 const coreSketchesRaw = import.meta.glob('./sketches/*.js', { query: '?raw', import: 'default', eager: true });
-const localSketchesRaw = import.meta.glob('./.local/sketches/*.js', { query: '?raw', import: 'default', eager: true });
+const localSketchesRaw = import.meta.glob('./local/sketches/*.js', { query: '?raw', import: 'default', eager: true });
 
 const sketchRegistry = {};
 const sketchRawRegistry = {};
@@ -98,7 +98,7 @@ const sketchSelect = document.getElementById('sketch-select');
 sketchSelect.innerHTML = '';
 allPaths.forEach(path => {
     let name = path.split('/').pop().replace('.js', '');
-    if (path.includes('.local')) name += ' (Local)';
+    if (path.includes('/local/')) name += ' (Local)';
     const opt = document.createElement('option');
     opt.value = path;
     opt.innerText = name;
@@ -377,6 +377,9 @@ const uploadAudioInput = document.getElementById('upload-audio-input');
 const btnUploadAudio = document.getElementById('btn-upload-audio');
 const audioStatusLabel = document.getElementById('audio-status-label');
 const liveAudio = document.getElementById('live-audio');
+const beatSensitivityInput = document.getElementById('beat-sensitivity');
+const beatSensitivityDisplay = document.getElementById('beat-sensitivity-display');
+const beatSensitivityGroup = document.getElementById('beat-sensitivity-group');
 
 btnUploadAudio.addEventListener('click', () => uploadAudioInput.click());
 
@@ -419,11 +422,34 @@ uploadAudioInput.addEventListener('change', async (e) => {
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0)); 
     window.decodedAudioBuffer = audioBuffer;
     
+    if (beatSensitivityGroup) beatSensitivityGroup.style.display = 'block';
+    
     window.audioAnalysisDurationOverride = audioBuffer.duration;
     recalculateDuration(); 
     
+    performAudioAnalysis();
+});
+
+if (beatSensitivityInput) {
+    beatSensitivityInput.addEventListener('input', (e) => {
+        if(beatSensitivityDisplay) beatSensitivityDisplay.innerText = e.target.value;
+    });
+    // Only re-run the heavy array generation fully when the user successfully finishes dragging the thumb!
+    beatSensitivityInput.addEventListener('change', () => {
+        if (window.decodedAudioBuffer) {
+            btnUploadAudio.innerText = "⏳ Recalculating Beats...";
+            performAudioAnalysis();
+        }
+    });
+}
+
+function performAudioAnalysis() {
+    const audioBuffer = window.decodedAudioBuffer;
+    if (!audioBuffer) return;
+
     const maxAcousticFrames = Math.ceil(audioBuffer.duration * fps);
-    window.audioAnalysisData = new Array(maxAcousticFrames).fill(null);
+    // Thread-safe buffer generation: completely separate array prevents the canvas from dropping indices or crashing during mid-playback recalculation!
+    const newAnalysisData = new Array(maxAcousticFrames).fill(null);
 
     const offlineCtx = new OfflineAudioContext(
         audioBuffer.numberOfChannels, 
@@ -442,7 +468,17 @@ uploadAudioInput.addEventListener('change', async (e) => {
     source.start(0);
 
     let rollingAverageRMS = 0;
-    let lastRMS = 0;
+    
+    // Determine mathematical envelope response behavior from slider (0..100)
+    let sensVal = beatSensitivityInput ? parseInt(beatSensitivityInput.value) : 50;
+    let jumpScalar = 1.08;
+    if (sensVal < 50) {
+        // [0, 50] -> Maps to [1.60, 1.08] (Heavy gates, demands massive impacts)
+        jumpScalar = 1.08 + ((50 - sensVal) / 50.0) * 0.52;
+    } else {
+        // [50, 100] -> Maps to [1.08, 1.01] (Hyper-sensitive, triggers on very subtle dynamic rises)
+        jumpScalar = 1.08 - ((sensVal - 50) / 50.0) * 0.07;
+    }
 
     for (let f = 0; f < maxAcousticFrames; f++) {
         const timeToSuspend = (f / fps);
@@ -456,36 +492,36 @@ uploadAudioInput.addEventListener('change', async (e) => {
                 for(let i=0; i<analyser.frequencyBinCount; i++) {
                     let val = dataArray[i] / 255.0; 
                     normalizedBins[i] = val;
+                    // Gather largest bass/sub volume footprint
                     if (i < 4) {
                         if (val > peakBass) peakBass = val;
                     }
                 }
                 
                 let isBeat = false;
-                // If the bass punches cleanly above the physical hardware boundary envelope
-                if (peakBass > rollingAverageRMS && peakBass > 0.5) {
+                if (peakBass > rollingAverageRMS && peakBass > 0.45) {
                     isBeat = true;
-                    // Force the threshold to leap above the crest to guarantee it doesn't double-trigger on the sustain tail
-                    rollingAverageRMS = peakBass * 1.08; 
+                    // Jump boundary above crest 
+                    rollingAverageRMS = peakBass * jumpScalar; 
                 } else {
-                    // Smoothly decay the threshold boundary downwards so the next drum hit can cleanly clip through
+                    // Decay curve 
                     rollingAverageRMS = rollingAverageRMS * 0.98;
                 }
-                
-                lastRMS = peakBass;
 
-                window.audioAnalysisData[f] = { bins: normalizedBins, beat: isBeat };
+                newAnalysisData[f] = { bins: normalizedBins, beat: isBeat };
                 offlineCtx.resume();
             });
         }
     }
 
     offlineCtx.startRendering().then(() => {
+        // Safely swap the physical memory array in one clock cycle
+        window.audioAnalysisData = newAnalysisData;
         btnUploadAudio.innerText = "✅ Track Tracked";
         btnUploadAudio.style.backgroundColor = '#4CAF50';
         if(pInstance) loadAndRunSketch();
     });
-});
+}
 
 // Format change
 formatSelect.addEventListener('change', (e) => {

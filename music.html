@@ -71,8 +71,16 @@
                         <input type="file" id="upload-audio-input" accept="audio/*" style="display: none;">
                         <button id="btn-upload-audio" style="width: 100%; background-color: #3b3b5c; margin-top: 5px;">🎵 Upload Audio Track</button>
                         <p id="audio-status-label" style="font-size: 0.75rem; color: #888; margin-top: 5px;">No track loaded (&lt; 50MB Rec)</p>
-                        <audio id="live-audio" controls style="width: 100%; height: 30px; display: none; margin-top: 5px;"></audio>
                         
+                        <div class="control-group" id="beat-sensitivity-group" style="display: none; margin-top: 10px;">
+                            <label for="beat-sensitivity">Beat Detection Sensitivity</label>
+                            <div style="display: flex; align-items: center;">
+                                <input type="range" id="beat-sensitivity" min="0" max="100" value="50" style="flex-grow: 1;">
+                                <span id="beat-sensitivity-display" style="font-size: 0.8rem; margin-left: 10px; min-width: 25px;">50</span>
+                            </div>
+                        </div>
+
+                        <audio id="live-audio" controls style="width: 100%; height: 30px; display: none; margin-top: 5px;"></audio>
                     </div>
                 </div>
             </details>

@@ -59,7 +59,7 @@ const path = require('path');
         const inputUploadHandle = await page.$('#upload-audio-input');
         
         // Reference the absolute file path
-        const audioPath = path.resolve(__dirname, '.local/135bpm 3_4.mp3');
+        const audioPath = path.resolve(__dirname, 'local/135bpm 3_4.mp3');
         await inputUploadHandle.uploadFile(audioPath);
         
         // Wait for File Processing to vanish
@@ -84,6 +84,7 @@ const path = require('path');
                 modeSelects[1].value = 'audio_freq';
                 modeSelects[1].dispatchEvent(new Event('change'));
             }
+        });
             
         // 4. WebCodecs Muxing Export Testing
         console.log("Triggering Hardware Video Encode...");

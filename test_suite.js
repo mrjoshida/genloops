@@ -55,14 +55,14 @@ const puppeteer = require('puppeteer');
         } catch(e) {
             console.error("Could not find CodeMirror instance. Dumping HTML...");
             const html = await page.content();
-            require('fs').writeFileSync('.local/dump.html', html);
+            require('fs').writeFileSync('local/dump.html', html);
             throw e;
         }
         await page.waitForSelector('.CodeMirror', { visible: true });
         
         await page.evaluate(() => {
             const cm = document.querySelector('.CodeMirror').CodeMirror;
-            cm.setValue("export default { name: 'E2E Test', parameters: [], draw: (p) => { p.background(0, 255, 0); } };");
+            cm.setValue("function setup() { createCanvas(100, 100); } function draw() { background(0, 255, 0); }");
             document.getElementById('btn-editor-run').click();
         });
         

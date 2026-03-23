@@ -1,6 +1,6 @@
 /**
  * @name 09 Music Reactive
- * @mode WEBGL
+ * @mode "WEBGL"
  * @bpm 135
  * @timeSignature 3/4
  * @param {slider} radius "Ring Radius" [50, 400, 1] 100

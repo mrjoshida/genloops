@@ -12,7 +12,7 @@ const path = require('path');
         await page.waitForSelector('#upload-audio-input');
 
         const inputUploadHandle = await page.$('#upload-audio-input');
-        const audioPath = path.resolve(__dirname, '.local/135bpm 3_4.mp3');
+        const audioPath = path.resolve(__dirname, 'local/135bpm 3_4.mp3');
         await inputUploadHandle.uploadFile(audioPath);
 
         await page.waitForFunction(() => {
