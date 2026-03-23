@@ -12,6 +12,7 @@ const fps = 30;
 let durationSecs = 8;
 let numLoops = 1;
 let totalFrames = durationSecs * fps;
+let loopFrames = durationSecs * fps;
 window.audioAnalysisData = [];
 window.audioAnalysisDurationOverride = null;
 window.audioRawBuffer = null;
@@ -334,6 +335,8 @@ const timeSigNum = document.getElementById('time-sig-num');
 const timeSigDen = document.getElementById('time-sig-den');
 const measuresInput = document.getElementById('measures-input');
 
+const renderModeSelect = document.getElementById('render-mode-select');
+
 function recalculateDuration() {
     let bpm = parseFloat(bpmInput.value);
     let num = parseInt(timeSigNum.value);
@@ -341,16 +344,23 @@ function recalculateDuration() {
     let measures = parseInt(measuresInput.value);
     
     // Total Duration = (60 / BPM) * num * (4 / den) * measures
-    let newDuration = (60 / Math.max(bpm, 1)) * num * (4 / den) * measures;
+    let baseLoopDuration = (60 / Math.max(bpm, 1)) * num * (4 / den) * measures;
+    loopFrames = Math.ceil(baseLoopDuration * fps);
     
-    if (window.audioAnalysisDurationOverride) {
+    let mode = renderModeSelect ? renderModeSelect.value : 'clip';
+    
+    if (mode === 'full' && window.audioAnalysisDurationOverride) {
         durationSecs = window.audioAnalysisDurationOverride;
     } else {
-        durationSecs = newDuration;
+        durationSecs = baseLoopDuration;
     }
     
     totalFrames = Math.ceil(durationSecs * fps);
     currentFrame = 0;
+}
+
+if (renderModeSelect) {
+    renderModeSelect.addEventListener('change', () => { recalculateDuration(); if(pInstance) loadAndRunSketch(); });
 }
 
 [bpmInput, timeSigNum, timeSigDen, measuresInput].forEach(el => {
@@ -400,6 +410,9 @@ uploadAudioInput.addEventListener('change', async (e) => {
     liveAudio.src = URL.createObjectURL(rawAudioBlob);
     liveAudio.style.display = 'block';
     
+    const renderModeGroup = document.getElementById('render-mode-group');
+    if (renderModeGroup) renderModeGroup.style.display = 'block';
+    
     // Save raw buffer for mp4 muxing later
     window.audioRawBuffer = arrayBuffer.slice(0);
 
@@ -434,15 +447,13 @@ uploadAudioInput.addEventListener('change', async (e) => {
         const timeToSuspend = (f / fps);
         if (timeToSuspend > 0 && timeToSuspend < audioBuffer.duration) {
             offlineCtx.suspend(timeToSuspend).then(() => {
-                const dataArray = new Float32Array(analyser.frequencyBinCount);
-                analyser.getFloatFrequencyData(dataArray); 
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(dataArray); 
                 
                 let normalizedBins = new Float32Array(analyser.frequencyBinCount);
                 let rmsBass = 0;
                 for(let i=0; i<analyser.frequencyBinCount; i++) {
-                    let val = (dataArray[i] + 100) / 100; // Map roughly -100db -> 0db to 0.0 -> 1.0
-                    if (val < 0) val = 0;
-                    if (val > 1) val = 1;
+                    let val = dataArray[i] / 255.0; 
                     normalizedBins[i] = val;
                     if (i < 4) rmsBass += val*val;
                 }
@@ -1244,8 +1255,8 @@ async function loadAndRunSketch() {
             if (!activeSketch) return;
 
             // Loop math (calculated with fractional offset to support internal looping)
-            const macroProgress = currentFrame / totalFrames; // 0.0 -> 1.0 exactly once
-            const progress = (macroProgress * numLoops) % 1.0; // 0.0 -> 1.0 N times
+            const macroProgress = currentFrame / Math.max(1, totalFrames - 1); // 0.0 -> 1.0 exactly once over final render
+            const progress = (currentFrame % loopFrames) / loopFrames; // 0.0 -> 1.0 per base musical phrase
 
             // Polar coordinates for seamless Perlin noise
             // angleFast handles the micro loops, angleSlow handles the overarching video timeframe
