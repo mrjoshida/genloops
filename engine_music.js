@@ -346,13 +346,15 @@ function recalculateDuration() {
     // Total Duration = (60 / BPM) * num * (4 / den) * measures
     let baseLoopDuration = (60 / Math.max(bpm, 1)) * num * (4 / den) * measures;
     loopFrames = Math.ceil(baseLoopDuration * fps);
-    
-    let mode = renderModeSelect ? renderModeSelect.value : 'clip';
-    
-    if (mode === 'full' && window.audioAnalysisDurationOverride) {
+
+    // If a physical track is actively uploaded, the export and live simulation unconditionally matches the FULL length of the song!
+    // The internal sketching mathematics (progress) continues to phrase-loop seamlessly using loopFrames inside the engine
+    if (window.audioAnalysisDurationOverride > 0) {
         durationSecs = window.audioAnalysisDurationOverride;
+        totalFrames = Math.ceil(durationSecs * fps);
     } else {
         durationSecs = baseLoopDuration;
+        totalFrames = loopFrames;
     }
     
     totalFrames = Math.ceil(durationSecs * fps);
@@ -411,8 +413,6 @@ uploadAudioInput.addEventListener('change', async (e) => {
     liveAudio.style.display = 'block';
     
     const renderModeGroup = document.getElementById('render-mode-group');
-    if (renderModeGroup) renderModeGroup.style.display = 'block';
-    
     // Save raw buffer for mp4 muxing later
     window.audioRawBuffer = arrayBuffer.slice(0);
 
@@ -422,7 +422,8 @@ uploadAudioInput.addEventListener('change', async (e) => {
     window.audioAnalysisDurationOverride = audioBuffer.duration;
     recalculateDuration(); 
     
-    window.audioAnalysisData = new Array(totalFrames).fill(null);
+    const maxAcousticFrames = Math.ceil(audioBuffer.duration * fps);
+    window.audioAnalysisData = new Array(maxAcousticFrames).fill(null);
 
     const offlineCtx = new OfflineAudioContext(
         audioBuffer.numberOfChannels, 
@@ -443,7 +444,7 @@ uploadAudioInput.addEventListener('change', async (e) => {
     let rollingAverageRMS = 0;
     let lastRMS = 0;
 
-    for (let f = 0; f < totalFrames; f++) {
+    for (let f = 0; f < maxAcousticFrames; f++) {
         const timeToSuspend = (f / fps);
         if (timeToSuspend > 0 && timeToSuspend < audioBuffer.duration) {
             offlineCtx.suspend(timeToSuspend).then(() => {
@@ -451,20 +452,27 @@ uploadAudioInput.addEventListener('change', async (e) => {
                 analyser.getByteFrequencyData(dataArray); 
                 
                 let normalizedBins = new Float32Array(analyser.frequencyBinCount);
-                let rmsBass = 0;
+                let peakBass = 0;
                 for(let i=0; i<analyser.frequencyBinCount; i++) {
                     let val = dataArray[i] / 255.0; 
                     normalizedBins[i] = val;
-                    if (i < 4) rmsBass += val*val;
+                    if (i < 4) {
+                        if (val > peakBass) peakBass = val;
+                    }
                 }
-                rmsBass = Math.sqrt(rmsBass / 4);
-                rollingAverageRMS = rollingAverageRMS * 0.9 + rmsBass * 0.1;
                 
                 let isBeat = false;
-                if (rmsBass > rollingAverageRMS * 1.5 && rmsBass > 0.2 && lastRMS <= rollingAverageRMS * 1.5) {
+                // If the bass punches cleanly above the physical hardware boundary envelope
+                if (peakBass > rollingAverageRMS && peakBass > 0.5) {
                     isBeat = true;
+                    // Force the threshold to leap above the crest to guarantee it doesn't double-trigger on the sustain tail
+                    rollingAverageRMS = peakBass * 1.08; 
+                } else {
+                    // Smoothly decay the threshold boundary downwards so the next drum hit can cleanly clip through
+                    rollingAverageRMS = rollingAverageRMS * 0.98;
                 }
-                lastRMS = rmsBass;
+                
+                lastRMS = peakBass;
 
                 window.audioAnalysisData[f] = { bins: normalizedBins, beat: isBeat };
                 offlineCtx.resume();
@@ -652,7 +660,7 @@ btnExport.addEventListener('click', async () => {
             codec: 'mp4a.40.2',
             sampleRate: window.decodedAudioBuffer.sampleRate,
             numberOfChannels: window.decodedAudioBuffer.numberOfChannels,
-            bitrate: 256000
+            bitrate: 192000
         });
 
         const numChans = window.decodedAudioBuffer.numberOfChannels;
@@ -734,7 +742,7 @@ btnExport.addEventListener('click', async () => {
     let paletteAbbr = palettes[paletteVal].abbr;
 
     let aspect = document.getElementById('format-select').value.replace(':', '_');
-    let duration = document.getElementById('duration-select').value + 's';
+    let duration = Math.floor(durationSecs) + 's';
 
     const suggestedFileName = `gl_${safeSketchName}_${aspect}_${duration}_${paletteAbbr}.mp4`;
 
@@ -748,11 +756,19 @@ function parseSketchString(rawText) {
     let desc = "";
     let mode = "P2D";
 
-    const nameMatch = rawText.match(/@name\s+"([^"]+)"/);
-    if (nameMatch) name = nameMatch[1];
+    const nameMatch = rawText.match(/@name\s+([^\r\n]+)/);
+    if (nameMatch) name = nameMatch[1].replace(/"/g, '').trim();
 
-    const modeMatch = rawText.match(/@mode\s+"([^"]+)"/i);
-    if (modeMatch) mode = modeMatch[1].toUpperCase();
+    const modeMatch = rawText.match(/@mode\s+([^\r\n]+)/i);
+    if (modeMatch) mode = modeMatch[1].replace(/"/g, '').trim().toUpperCase();
+
+    let bpm = null;
+    let timeSignature = null;
+    const bpmMatch = rawText.match(/@bpm\s+([\d.]+)/i);
+    if (bpmMatch) bpm = parseFloat(bpmMatch[1]);
+    
+    const tsMatch = rawText.match(/@timeSignature\s+(\d+)\/(\d+)/i);
+    if (tsMatch) timeSignature = { num: parseInt(tsMatch[1]), den: parseInt(tsMatch[2]) };
 
     // Parse params: @param {slider} id "name" [min, max, step] default
     const paramRegex = /@param\s+\{([^}]+)\}\s+(\w+)\s+"([^"]+)"\s*(?:\[([\d.]+),\s*([\d.]+),\s*([\d.]+)\])?\s*([\w.]+)/g;
@@ -780,7 +796,9 @@ function parseSketchString(rawText) {
         parameters: params,
         rawCode: rawText,
         setup: () => { },
-        draw: () => { }
+        draw: () => { },
+        bpm: bpm,
+        timeSignature: timeSignature
     };
 }
 
@@ -1147,6 +1165,19 @@ async function loadAndRunSketch() {
         activeSketch = { mode: "P2D", rawCode: "function setup(){createCanvas(100,100);} function draw(){background(255,0,0);}", parameters: [] };
     }
 
+    // Auto-fill Musical Metadata from JSDoc frontmatter
+    let shouldRecalculate = false;
+    if (activeSketch.bpm) {
+        bpmInput.value = activeSketch.bpm;
+        shouldRecalculate = true;
+    }
+    if (activeSketch.timeSignature) {
+        timeSigNum.value = activeSketch.timeSignature.num;
+        timeSigDen.value = activeSketch.timeSignature.den;
+        shouldRecalculate = true;
+    }
+    if (shouldRecalculate) recalculateDuration();
+
     buildUI(activeSketch.parameters);
 
     // Always use sandbox mode now
@@ -1303,8 +1334,11 @@ async function loadAndRunSketch() {
                                         sum += ad.bins[i];
                                         count++;
                                     }
-                                    modPhase = count > 0 ? Math.pow(sum / count, 1.5) : 0; // Exponent adds punch
+                                    let avg = count > 0 ? sum / count : 0;
+                                    // High exponent strictly separates peaks from the baseline noise floor
+                                    modPhase = Math.pow(avg, 6); 
                                 } else if (mode === 'audio_beat') {
+                                    // Re-introduce the physical decay envelope for 1-frame beat hits
                                     param.lfo.beatEnv = param.lfo.beatEnv || 0;
                                     if (ad.beat) param.lfo.beatEnv = 1.0;
                                     else param.lfo.beatEnv = Math.max(0, param.lfo.beatEnv - 0.1); 
@@ -1409,7 +1443,12 @@ async function loadAndRunSketch() {
             p.image(finalComposite, 0, 0, currentWidth, currentHeight);
 
             if (!isRecording) {
-                currentFrame++;
+                // If the track is actually playing physically, force the frame to align with the audio clock to prevent engine lagging
+                if (isPlaying && liveAudio && !liveAudio.paused) {
+                    currentFrame = Math.floor((liveAudio.currentTime % liveAudio.duration) * fps);
+                } else {
+                    currentFrame++;
+                }
             }
         };
     };
