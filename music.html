@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generative Canvas Framework</title>
+    <title>GenLoops Music Edition</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
     <link rel="stylesheet" href="style.css">
     <!-- CodeMirror 5 -->
@@ -13,6 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
     <script src="https://unpkg.com/mp4-muxer/build/mp4-muxer.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 </head>
 <style>
         .checkbox-group label { margin: 0; }
@@ -23,7 +24,7 @@
         <!-- The UI Panel -->
         <aside id="ui-panel">
             <h1>GenLoops</h1>
-            <a href="music.html" style="color: #66FCF1; text-decoration: none; font-size: 0.8rem; margin-bottom: 15px; display: inline-block;">🎵 Try Music Edition</a>
+            <a href="index.html" style="color: #66FCF1; text-decoration: none; font-size: 0.8rem; margin-bottom: 15px; display: inline-block;">← Back to Standard Edition</a>
             <div class="control-group">
                 <label for="sketch-select">Sketch Module</label>
                 <div style="display: flex; gap: 8px;">
@@ -46,24 +47,32 @@
                 </div>
 
                 <div class="control-group">
-                    <label for="duration-select">Duration</label>
-                    <select id="duration-select">
-                        <option value="8">8s (Spotify Canvas)</option>
-                        <option value="15">15s (Shorts / Reels)</option>
-                        <option value="30">30s (Extended)</option>
-                        <option value="60">60s (Full Minute)</option>
-                    </select>
-                </div>
-                
-                <div class="control-group">
-                    <label for="loops-select">Loop Density</label>
-                    <select id="loops-select">
-                        <option value="1">1 Continuous Loop</option>
-                        <option value="2">2 Loops</option>
-                        <option value="3">3 Loops</option>
-                        <option value="4">4 Loops</option>
-                        <option value="8">8 Fast Loops</option>
-                    </select>
+                    <label>Musical Timing</label>
+                    <div style="display: flex; gap: 5px; margin-top: 5px; margin-bottom: 5px;">
+                        <input type="number" id="bpm-input" value="120" min="40" max="300" style="width: 30%; background:#1a1a1a; color:#fff; border:1px solid #333; padding:5px; border-radius:3px;" title="Tempo (BPM)">
+                        <span style="display:flex; align-items:center; color:#888;">BPM</span>
+                    </div>
+                    <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                        <input type="number" id="time-sig-num" value="4" min="1" max="16" style="width: 25%; background:#1a1a1a; color:#fff; border:1px solid #333; padding:5px; border-radius:3px;" title="Beats per Measure">
+                        <span style="display:flex; align-items:center;">/</span>
+                        <select id="time-sig-den" style="width: 35%; background:#1a1a1a; color:#fff; border:1px solid #333; padding:5px; border-radius:3px;" title="Beat Value">
+                            <option value="4" selected>4</option>
+                            <option value="8">8</option>
+                            <option value="16">16</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                        <input type="number" id="measures-input" value="4" min="1" max="128" style="width: 30%; background:#1a1a1a; color:#fff; border:1px solid #333; padding:5px; border-radius:3px;" title="Number of Measures">
+                        <span style="display:flex; align-items:center; color:#888;">Measures</span>
+                    </div>
+                    
+                    <div style="margin-top: 15px; border-top: 1px dashed #333; padding-top: 10px;">
+                        <label>Audio Track Sync</label>
+                        <input type="file" id="upload-audio-input" accept="audio/*" style="display: none;">
+                        <button id="btn-upload-audio" style="width: 100%; background-color: #3b3b5c; margin-top: 5px;">🎵 Upload Audio Track</button>
+                        <p id="audio-status-label" style="font-size: 0.75rem; color: #888; margin-top: 5px;">No track loaded (< 50MB Rec)</p>
+                        <audio id="live-audio" controls style="width: 100%; height: 30px; display: none; margin-top: 5px;"></audio>
+                    </div>
                 </div>
             </details>
 
@@ -237,6 +246,6 @@
     </div>
 
     <!-- Load Engine -->
-    <script type="module" src="engine.js"></script>
+    <script type="module" src="engine_music.js"></script>
 </body>
 </html>
