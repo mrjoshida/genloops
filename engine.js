@@ -101,42 +101,6 @@ allPaths.forEach(path => {
     sketchSelect.appendChild(opt);
 });
 
-const btnLoadDir = document.getElementById('btn-load-dir');
-if (btnLoadDir) {
-    btnLoadDir.addEventListener('click', async () => {
-        try {
-            const dirHandle = await window.showDirectoryPicker();
-            let addedCount = 0;
-            for await (const entry of dirHandle.values()) {
-                if (entry.kind === 'file' && entry.name.endsWith('.js')) {
-                    const file = await entry.getFile();
-                    const text = await file.text();
-                    
-                    const baseName = entry.name.replace('.js', '');
-                    const newPath = `local_dir_${baseName}`;
-
-                    sketchRegistry[newPath] = parseSketchString(text);
-                    sketchRawRegistry[newPath] = text;
-
-                    const opt = document.createElement('option');
-                    opt.value = newPath;
-                    opt.innerText = (sketchRegistry[newPath].name || baseName) + ' (Loaded)';
-                    sketchSelect.appendChild(opt);
-
-                    addedCount++;
-                }
-            }
-            if (addedCount > 0) {
-                alert(`Loaded ${addedCount} sketch(es) from folder.`);
-            } else {
-                alert('No .js files found in the selected folder.');
-            }
-        } catch (err) {
-            console.error('Directory load cancelled or failed:', err);
-        }
-    });
-}
-
 const formatSelect = document.getElementById('format-select');
 const btnPlay = document.getElementById('btn-play');
 const btnExport = document.getElementById('btn-export');
