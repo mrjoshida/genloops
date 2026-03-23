@@ -28,6 +28,17 @@ const sketchRegistry = {};
 const sketchRawRegistry = {};
 
 const allPaths = [...Object.keys(coreSketchesRaw), ...Object.keys(localSketchesRaw)];
+
+allPaths.sort((a, b) => {
+    const aName = a.split('/').pop();
+    const bName = b.split('/').pop();
+    const aIsMusic = aName.startsWith('music_');
+    const bIsMusic = bName.startsWith('music_');
+    if (aIsMusic && !bIsMusic) return -1;
+    if (!aIsMusic && bIsMusic) return 1;
+    return aName.localeCompare(bName);
+});
+
 allPaths.forEach(path => {
     const raw = coreSketchesRaw[path] || localSketchesRaw[path];
     if (raw) {
@@ -521,6 +532,11 @@ function performAudioAnalysis() {
         window.audioAnalysisData = newAnalysisData;
         btnUploadAudio.innerText = "✅ Track Tracked";
         btnUploadAudio.style.backgroundColor = '#4CAF50';
+        
+        // Auto-pause the visualizer to wait for the user to start playback
+        isPlaying = false;
+        btnPlay.innerText = 'Play';
+        
         if(pInstance) loadAndRunSketch();
     });
 }
@@ -1345,6 +1361,9 @@ async function loadAndRunSketch() {
             pgBloom = p.createGraphics(currentWidth, currentHeight, p.P2D);
             pgCRT = p.createGraphics(currentWidth, currentHeight, p.WEBGL);
             crtShader = pgCRT.createShader(crtVert, crtFrag);
+
+            // Respect global playback state on initial boot
+            if (!isPlaying) p.noLoop();
         };
 
         p.draw = () => {
