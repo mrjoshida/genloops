@@ -29,12 +29,12 @@ const path = require('path');
         // Wait for dynamic Vite glob loading
         await page.waitForFunction(() => document.querySelectorAll('#sketch-select option').length > 1);
         
-        console.log("Selecting 09_music_reactive.js sketch...");
+        console.log("Selecting music_01_beat.js sketch...");
         const sketches = await page.$$eval('#sketch-select option', opts => opts.map(o => o.value));
-        const targetSketch = sketches.find(s => s.includes('09_music_reactive'));
+        const targetSketch = sketches.find(s => s.includes('music_01_beat'));
         
         if (!targetSketch) {
-            console.error("09_music_reactive.js not found in sketch list!");
+            console.error("music_01_beat.js not found in sketch list!");
             process.exit(1);
         }
         
@@ -93,7 +93,6 @@ const path = require('path');
         
         await page.evaluate(() => {
             console.log(`[RECEIPT] Track overrides duration to: ${window.audioAnalysisDurationOverride} seconds`);
-            console.log(`[RECEIPT] Export engine configured to render: ${totalFrames} frames`);
         });
         
         await page.click('#btn-export');

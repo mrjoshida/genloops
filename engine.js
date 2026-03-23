@@ -94,6 +94,8 @@ const sketchSelect = document.getElementById('sketch-select');
 sketchSelect.innerHTML = '';
 allPaths.forEach(path => {
     let name = path.split('/').pop().replace('.js', '');
+    if (name.startsWith('music_')) return; // Hide discrete audio-driven visualizers from the non-music ecosystem
+    
     if (path.includes('/local/')) name += ' (Local)';
     const opt = document.createElement('option');
     opt.value = path;

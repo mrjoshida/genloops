@@ -98,6 +98,8 @@ const sketchSelect = document.getElementById('sketch-select');
 sketchSelect.innerHTML = '';
 allPaths.forEach(path => {
     let name = path.split('/').pop().replace('.js', '');
+    if (name.startsWith('music_')) name = '🎧 ' + name.replace('music_', '');
+    
     if (path.includes('/local/')) name += ' (Local)';
     const opt = document.createElement('option');
     opt.value = path;
@@ -543,9 +545,36 @@ btnPlay.addEventListener('click', () => {
     if (isPlaying) {
         pInstance.loop();
         btnPlay.innerText = 'Pause';
+        if (liveAudio && liveAudio.src) liveAudio.play();
     } else {
         pInstance.noLoop();
         btnPlay.innerText = 'Play';
+        if (liveAudio && liveAudio.src) liveAudio.pause();
+    }
+});
+
+// Bind native Audio Element controls to the Engine Loop
+liveAudio.addEventListener('play', () => {
+    if (!isPlaying) {
+        isPlaying = true;
+        if (pInstance) pInstance.loop();
+        btnPlay.innerText = 'Pause';
+    }
+});
+
+liveAudio.addEventListener('pause', () => {
+    if (isPlaying) {
+        isPlaying = false;
+        if (pInstance) pInstance.noLoop();
+        btnPlay.innerText = 'Play';
+    }
+});
+
+liveAudio.addEventListener('seeking', () => {
+    // Force a canvas redraw so scrubbing while paused updates the frame natively
+    if (!isPlaying && pInstance && liveAudio.duration) {
+        currentFrame = Math.floor((liveAudio.currentTime % liveAudio.duration) * fps);
+        pInstance.redraw();
     }
 });
 
@@ -1390,6 +1419,25 @@ async function loadAndRunSketch() {
                 });
             }
 
+            let musicData = null;
+            if (window.audioAnalysisData && window.audioAnalysisData[currentFrame]) {
+                const ad = window.audioAnalysisData[currentFrame];
+                const avg = (start, end) => {
+                    let sum = 0, count = 0;
+                    for (let i = start; i <= end; i++) { sum += ad.bins[i]; count++; }
+                    return count > 0 ? sum / count : 0;
+                };
+                musicData = {
+                    beat: ad.beat,
+                    energy: ad.bins,
+                    bass: avg(0, 1),
+                    lowMid: avg(1, 3),
+                    mid: avg(3, 7),
+                    highMid: avg(7, 14),
+                    treble: avg(14, 63)
+                };
+            }
+
             // Context object that gets passed to the dumb sketch modules
             const ctx = {
                 progress: progress,
@@ -1399,6 +1447,7 @@ async function loadAndRunSketch() {
                 palette: currentPalette,
                 params: modulatedParams,
                 safeZone: { top: 200, bottom: 200, left: 100, right: 100 },
+                music: musicData,
                 loopNoise: (x, y, p_val) => {
                     // Crossfade two 3D noise slices for 4D-like seamless 2D space looping
                     let r = 1.0;
