@@ -278,7 +278,7 @@ let currentHeight = 1920;
 let currentSketchPath = Object.keys(sketchRegistry)[0];
 
 // Update sketch on change
-sketchSelect.addEventListener('change', (e) => {
+sketchSelect.addEventListener('change', async (e) => {
     if (isRecording) return; // Prevent abort mid-render
     currentSketchPath = e.target.value;
 
@@ -288,6 +288,22 @@ sketchSelect.addEventListener('change', (e) => {
     }
 
     loadAndRunSketch();
+
+    // Auto-load audio if specified in frontmatter
+    const sketchObj = sketchRegistry[currentSketchPath];
+    if (sketchObj && sketchObj.audioFile) {
+        try {
+            const resp = await fetch("/" + sketchObj.audioFile);
+            if (resp.ok) {
+                const arrayBuffer = await resp.arrayBuffer();
+                let filetype = 'audio/wav';
+                if (sketchObj.audioFile.endsWith('.mp3')) filetype = 'audio/mp3';
+                await processAudioArrayBuffer(arrayBuffer, sketchObj.audioFile.split('/').pop(), filetype);
+            }
+        } catch(err) {
+            console.warn("Failed to auto-load sketch audio:", err);
+        }
+    }
 });
 
 function loadDraftOrRawCodeIntoEditor() {
@@ -399,23 +415,22 @@ btnUploadAudio.addEventListener('click', () => uploadAudioInput.click());
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 window.decodedAudioBuffer = null;
 
-uploadAudioInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
+async function processAudioArrayBuffer(arrayBuffer, filename, filetype) {
     btnUploadAudio.innerText = "⏳ Processing Audio...";
-    audioStatusLabel.innerText = file.name;
+    audioStatusLabel.innerText = filename;
+
+    const rawAudioBlob = new Blob([arrayBuffer], { type: filetype || 'audio/wav' });
 
     // Attempt to extract BPM from ID3 tags
     if (window.jsmediatags) {
-        window.jsmediatags.read(file, {
+        window.jsmediatags.read(rawAudioBlob, {
             onSuccess: function(tag) {
                 if (tag.tags && tag.tags.TBPM) {
                     const parsedBpm = parseFloat(tag.tags.TBPM.data);
                     if (!isNaN(parsedBpm) && parsedBpm > 0) {
                         bpmInput.value = parsedBpm;
                         bpmInput.dispatchEvent(new Event('change'));
-                        audioStatusLabel.innerText = file.name + ` (${parsedBpm} BPM)`;
+                        audioStatusLabel.innerText = filename + ` (${parsedBpm} BPM)`;
                     }
                 }
             },
@@ -423,8 +438,6 @@ uploadAudioInput.addEventListener('change', async (e) => {
         });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const rawAudioBlob = new Blob([arrayBuffer], { type: file.type });
     liveAudio.src = URL.createObjectURL(rawAudioBlob);
     liveAudio.style.display = 'block';
     
@@ -440,19 +453,26 @@ uploadAudioInput.addEventListener('change', async (e) => {
     window.audioAnalysisDurationOverride = audioBuffer.duration;
     recalculateDuration(); 
     
+    // Auto-pause before analysis so play button is correct
+    isPlaying = false;
+    btnPlay.innerText = 'Play';
+
     performAudioAnalysis();
+}
+
+uploadAudioInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const arrayBuffer = await file.arrayBuffer();
+    await processAudioArrayBuffer(arrayBuffer, file.name, file.type);
 });
 
+let currentSensitivityLevel = 2; // Default to Level 3 (Index 2)
 if (beatSensitivityInput) {
+    // Simply update the global index in real-time, no costly offline re-rendering!
     beatSensitivityInput.addEventListener('input', (e) => {
         if(beatSensitivityDisplay) beatSensitivityDisplay.innerText = e.target.value;
-    });
-    // Only re-run the heavy array generation fully when the user successfully finishes dragging the thumb!
-    beatSensitivityInput.addEventListener('change', () => {
-        if (window.decodedAudioBuffer) {
-            btnUploadAudio.innerText = "⏳ Recalculating Beats...";
-            performAudioAnalysis();
-        }
+        currentSensitivityLevel = parseInt(e.target.value) - 1;
     });
 }
 
@@ -480,18 +500,18 @@ function performAudioAnalysis() {
     
     source.start(0);
 
-    let rollingAverageRMS = 0;
-    
-    // Determine mathematical envelope response behavior from slider (0..100)
-    let sensVal = beatSensitivityInput ? parseInt(beatSensitivityInput.value) : 50;
-    let jumpScalar = 1.08;
-    if (sensVal < 50) {
-        // [0, 50] -> Maps to [1.60, 1.08] (Heavy gates, demands massive impacts)
-        jumpScalar = 1.08 + ((50 - sensVal) / 50.0) * 0.52;
-    } else {
-        // [50, 100] -> Maps to [1.08, 1.01] (Hyper-sensitive, triggers on very subtle dynamic rises)
-        jumpScalar = 1.08 - ((sensVal - 50) / 50.0) * 0.07;
-    }
+    // Establish 5 distinct preset gates
+    const presetSensitivities = [
+        { base: 0.55, jump: 1.50 }, // Level 1 (Strict/Massive Impacts)
+        { base: 0.45, jump: 1.25 }, // Level 2
+        { base: 0.35, jump: 1.08 }, // Level 3 (Default)
+        { base: 0.25, jump: 1.05 }, // Level 4
+        { base: 0.15, jump: 1.02 }  // Level 5 (Hyper-sensitive)
+    ];
+
+    let rollingAverages = [0, 0, 0, 0, 0];
+
+    let previousBins = new Float32Array(analyser.frequencyBinCount);
 
     for (let f = 0; f < maxAcousticFrames; f++) {
         const timeToSuspend = (f / fps);
@@ -502,26 +522,37 @@ function performAudioAnalysis() {
                 
                 let normalizedBins = new Float32Array(analyser.frequencyBinCount);
                 let peakBass = 0;
+                let spectralFlux = 0;
+
                 for(let i=0; i<analyser.frequencyBinCount; i++) {
                     let val = dataArray[i] / 255.0; 
                     normalizedBins[i] = val;
+                    
+                    let diff = val - previousBins[i];
+                    if (diff > 0) spectralFlux += diff;
+
                     // Gather largest bass/sub volume footprint
                     if (i < 4) {
                         if (val > peakBass) peakBass = val;
                     }
                 }
                 
-                let isBeat = false;
-                if (peakBass > rollingAverageRMS && peakBass > 0.45) {
-                    isBeat = true;
-                    // Jump boundary above crest 
-                    rollingAverageRMS = peakBass * jumpScalar; 
-                } else {
-                    // Decay curve 
-                    rollingAverageRMS = rollingAverageRMS * 0.98;
+                previousBins = new Float32Array(normalizedBins);
+                let detectionValue = (spectralFlux * 0.4) + (peakBass * 0.6); 
+
+                let beats = [false, false, false, false, false];
+
+                for (let lvl = 0; lvl < 5; lvl++) {
+                    const config = presetSensitivities[lvl];
+                    if (detectionValue > rollingAverages[lvl] && detectionValue > config.base) {
+                        beats[lvl] = true;
+                        rollingAverages[lvl] = detectionValue * config.jump;
+                    } else {
+                        rollingAverages[lvl] = rollingAverages[lvl] * 0.98;
+                    }
                 }
 
-                newAnalysisData[f] = { bins: normalizedBins, beat: isBeat };
+                newAnalysisData[f] = { bins: normalizedBins, beats: beats };
                 offlineCtx.resume();
             });
         }
@@ -532,10 +563,6 @@ function performAudioAnalysis() {
         window.audioAnalysisData = newAnalysisData;
         btnUploadAudio.innerText = "✅ Track Tracked";
         btnUploadAudio.style.backgroundColor = '#4CAF50';
-        
-        // Auto-pause the visualizer to wait for the user to start playback
-        isPlaying = false;
-        btnPlay.innerText = 'Play';
         
         if(pInstance) loadAndRunSketch();
     });
@@ -583,6 +610,22 @@ liveAudio.addEventListener('pause', () => {
         isPlaying = false;
         if (pInstance) pInstance.noLoop();
         btnPlay.innerText = 'Play';
+    }
+});
+
+const loopPlaybackToggle = document.getElementById('loop-playback-toggle');
+if (loopPlaybackToggle) {
+    liveAudio.loop = loopPlaybackToggle.checked;
+    loopPlaybackToggle.addEventListener('change', (e) => {
+        liveAudio.loop = e.target.checked;
+    });
+}
+
+liveAudio.addEventListener('ended', () => {
+    if (!liveAudio.loop) {
+        isPlaying = false;
+        btnPlay.innerText = 'Play';
+        if (pInstance) pInstance.noLoop();
     }
 });
 
@@ -845,11 +888,15 @@ function parseSketchString(rawText) {
 
     let bpm = null;
     let timeSignature = null;
+    let audioFile = null;
     const bpmMatch = rawText.match(/@bpm\s+([\d.]+)/i);
     if (bpmMatch) bpm = parseFloat(bpmMatch[1]);
     
     const tsMatch = rawText.match(/@timeSignature\s+(\d+)\/(\d+)/i);
     if (tsMatch) timeSignature = { num: parseInt(tsMatch[1]), den: parseInt(tsMatch[2]) };
+
+    const audioMatch = rawText.match(/@audio\s+([^\r\n]+)/i);
+    if (audioMatch) audioFile = audioMatch[1].replace(/"/g, '').trim();
 
     // Parse params: @param {slider} id "name" [min, max, step] default
     const paramRegex = /@param\s+\{([^}]+)\}\s+(\w+)\s+"([^"]+)"\s*(?:\[([\d.]+),\s*([\d.]+),\s*([\d.]+)\])?\s*([\w.]+)/g;
@@ -879,7 +926,8 @@ function parseSketchString(rawText) {
         setup: () => { },
         draw: () => { },
         bpm: bpm,
-        timeSignature: timeSignature
+        timeSignature: timeSignature,
+        audioFile: audioFile
     };
 }
 
@@ -1424,7 +1472,7 @@ async function loadAndRunSketch() {
                                 } else if (mode === 'audio_beat') {
                                     // Re-introduce the physical decay envelope for 1-frame beat hits
                                     param.lfo.beatEnv = param.lfo.beatEnv || 0;
-                                    if (ad.beat) param.lfo.beatEnv = 1.0;
+                                    if (ad.beats && ad.beats[currentSensitivityLevel]) param.lfo.beatEnv = 1.0;
                                     else param.lfo.beatEnv = Math.max(0, param.lfo.beatEnv - 0.1); 
                                     modPhase = param.lfo.beatEnv;
                                 }
@@ -1447,7 +1495,7 @@ async function loadAndRunSketch() {
                     return count > 0 ? sum / count : 0;
                 };
                 musicData = {
-                    beat: ad.beat,
+                    beat: ad.beats ? ad.beats[currentSensitivityLevel] : false,
                     energy: ad.bins,
                     bass: avg(0, 1),
                     lowMid: avg(1, 3),
@@ -1549,7 +1597,8 @@ async function loadAndRunSketch() {
             if (!isRecording) {
                 // If the track is actually playing physically, force the frame to align with the audio clock to prevent engine lagging
                 if (isPlaying && liveAudio && !liveAudio.paused) {
-                    currentFrame = Math.floor((liveAudio.currentTime % liveAudio.duration) * fps);
+                    const AUDIO_LATENCY_LOOKAHEAD_SECS = 0.06; // Pre-compensate browser DAC buffer delay
+                    currentFrame = Math.floor(((liveAudio.currentTime + AUDIO_LATENCY_LOOKAHEAD_SECS) % liveAudio.duration) * fps);
                 } else {
                     currentFrame++;
                 }
